@@ -1,0 +1,14 @@
+{
+  "name": "md2pptx-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-only Markdown to editable PowerPoint with live slide preview",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs && node --check src/app.js",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "pptxgenjs": "4.0.0"
+  }
+}
