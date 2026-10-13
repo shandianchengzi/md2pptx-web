@@ -6,6 +6,62 @@ export const SLIDE_H = 720;
 export const BODY_LEFT = 78;
 export const BODY_WIDTH = 1124;
 export const BOTTOM = 635;
+export const SLIDE_WIDTH_CM = 33.8666666667;
+export const PX_PER_CM = SLIDE_W / SLIDE_WIDTH_CM;
+export const DEFAULT_MARGINS_CM = Object.freeze({ top: 1.5, bottom: 2.2, left: 2.1, right: 2.1 });
+export const MIN_MARGIN_CM = 0.5;
+export const MAX_MARGIN_CM = 5;
+export function resolveMarginsCm(value = {}) {
+  const output = {};
+  for (const [key, fallback] of Object.entries(DEFAULT_MARGINS_CM)) {
+    const raw = value && typeof value === 'object' ? value[key] : undefined;
+    const number = raw === '' || raw === null || raw === undefined ? fallback : Number(raw);
+    output[key] = Number.isFinite(number)
+      ? Math.round(Math.max(MIN_MARGIN_CM, Math.min(MAX_MARGIN_CM, number)) * 10) / 10 : fallback;
+  }
+  return output;
+}
+export function sliceStyledRuns(runs, from, to) {
+  const result = [];
+  let cursor = 0;
+  for (const part of runs) {
+    const end = cursor + part.text.length;
+    const beginLocal = Math.max(from, cursor);
+    const endLocal = Math.min(to, end);
+    if (endLocal > beginLocal) result.push({
+      text: part.text.slice(beginLocal - cursor, endLocal - cursor), bold: Boolean(part.bold)
+    });
+    cursor = end;
+  }
+  return result;
+}
+// Preserve Markdown strong emphasis as rich text runs through line wrapping.
+export function parseBoldRuns(raw) {
+  const cleaned = String(raw)
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_m, label) => '[Image: ' + label + ']')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<https?:\/\/[^>]+>/g, m => m.slice(1,-1))
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/<\/?[^>]+>/g, '');
+  function cleanPlain(value) {
+    return value.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g,'$1')
+      .replace(/(?<!_)_([^_]+)_(?!_)/g,'$1')
+      .replace(/`([^`]+)`/g,'$1');
+  }
+  const pieces = [];
+  const pattern = /\*\*([\s\S]+?)\*\*|__([\s\S]+?)__/g;
+  let i=0,m;
+  while ((m=pattern.exec(cleaned))) {
+    if(m.index>i) pieces.push({text:cleanPlain(cleaned.slice(i,m.index)),bold:false});
+    pieces.push({text:cleanPlain(m[1] ?? m[2]),bold:true});
+    i=pattern.lastIndex;
+  }
+  if(i<cleaned.length) pieces.push({text:cleanPlain(cleaned.slice(i)),bold:false});
+  const all=pieces.map(x=>x.text).join('');
+  const trimStart=all.length-all.trimStart().length;
+  return sliceStyledRuns(pieces,trimStart,trimStart+all.trim().length);
+}
+
 
 export const EXAMPLE = `# AgentEmu 项目进度汇报
 
@@ -78,8 +134,9 @@ export function parseMarkdown(markdown, overrideTitle = '') {
   let inCode = false;
   function flush() {
     if (!paragraphLines.length) return;
-    const text = normalizeParagraph(paragraphLines).trim();
-    if (text) current.blocks.push({ type: 'paragraph', text });
+    const runs = parseBoldRuns(normalizeParagraph(paragraphLines));
+    const text = runs.map(r=>r.text).join('');
+    if (text) current.blocks.push({ type: 'paragraph', text, runs });
     paragraphLines = [];
   }
   function nextSection(title) {
@@ -119,12 +176,14 @@ export function parseMarkdown(markdown, overrideTitle = '') {
     if (li) {
       flush();
       const marker = /^\d/.test(li[1]) ? li[1] : '•';
-      current.blocks.push({ type: 'list', text: marker + '  ' + stripInline(li[2]) });
+      const runs = parseBoldRuns(marker + '  ' + li[2]);
+      current.blocks.push({ type: 'list', text: runs.map(r=>r.text).join(''), runs });
       return;
     }
     if (/^>\s?/.test(line)) {
       flush();
-      current.blocks.push({ type: 'quote', text: '❝  ' + stripInline(line.replace(/^>\s?/, '')) });
+      const runs = parseBoldRuns('❝  ' + line.replace(/^>\s?/, ''));
+      current.blocks.push({ type: 'quote', text: runs.map(r=>r.text).join(''), runs });
       return;
     }
     // Textual fallback for Markdown tables: retain cell contents.
@@ -136,7 +195,7 @@ export function parseMarkdown(markdown, overrideTitle = '') {
       }
       return;
     }
-    paragraphLines.push(stripInline(line));
+    paragraphLines.push(line);
   });
   flush();
   if (current.blocks.length) sections.push(current);
@@ -221,13 +280,26 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
   const LINE_HEIGHT = Math.ceil(BODY_FONT * (compact ? 1.48 : 1.52));
   const GAP = Math.round(BODY_FONT * (compact ? 0.48 : 0.59));
   const pages = [];
+  const marginsCm = resolveMarginsCm(options.marginsCm);
+  const left = marginsCm.left * PX_PER_CM;
+  const right = marginsCm.right * PX_PER_CM;
+  const top = marginsCm.top * PX_PER_CM;
+  const bottom = marginsCm.bottom * PX_PER_CM;
+  const width = SLIDE_W - left - right;
+  const showFooterTitle = options.showFooterTitle === true;
+  const showPageNumber = options.showPageNumber === true;
+  const showFooter = showFooterTitle || showPageNumber;
+  const footerLineY = SLIDE_H - Math.max(38, bottom * .65);
+  const contentBottom = SLIDE_H - bottom - (showFooter ? 34 : 0);
+  const layout = {marginsCm, left, right, top, bottom, width, contentBottom,
+    footerLineY, footerTextY: footerLineY + 7, showFooterTitle, showPageNumber};
 
   function titleRows(title, continued) {
     const prefix = continued ? '（续）' : '';
     const t = title + prefix;
-    const lines = wrapText(t, 1085, 38, measure).slice(0,2);
+    const lines = wrapText(t, width - 15, 38, measure).slice(0,2);
     return lines.map((text,i) => ({
-      text, x: BODY_LEFT, y: 55 + i*48, height: 50,
+      text, x: left, y: top + i*48, width, height: 50,
       size: 38, bold: true, kind: 'title'
     }));
   }
@@ -236,7 +308,8 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
     const header = titleRows(title, continued);
     const page = {
       title, continued, header, rows: [],
-      y: header.length === 1 ? 166 : 203
+      layout: {...layout, titleDividerY: top + (header.length === 1 ? 77 : 122)},
+      y: top + (header.length === 1 ? 111 : 148)
     };
     pages.push(page);
     return page;
@@ -256,12 +329,20 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
         : code ? Math.max(18, Math.round(BODY_FONT * .8)) : BODY_FONT;
       const height = sub ? Math.ceil(styleSize * 1.5)
         : code ? Math.ceil(styleSize * 1.5) : LINE_HEIGHT;
-      const left = BODY_LEFT + (block.type === 'quote' ? 21 : code ? 18 : 0);
-      const width = BODY_WIDTH - (left - BODY_LEFT) - 9;
-      const wrapped = wrapText(block.text, width, styleSize, measure);
+      const rowLeft = left + (block.type === 'quote' ? 21 : code ? 18 : 0);
+      const rowWidth = width - (rowLeft - left) - 9;
+      const wrapped = wrapText(block.text, rowWidth, styleSize, measure);
+      let textCursor = 0;
+      const styledLines = wrapped.map(line => {
+        if (!block.runs) return undefined;
+        let at = block.text.indexOf(line, textCursor);
+        if (at === -1) at = textCursor;
+        textCursor = at + line.length;
+        return sliceStyledRuns(block.runs, at, at + line.length);
+      });
       let offset = 0;
       while (offset < wrapped.length) {
-        let capacity = Math.floor((BOTTOM - page.y) / height);
+        let capacity = Math.floor((contentBottom - page.y) / height);
         const remaining = wrapped.length - offset;
         // Avoid leaving a single line of a long paragraph on either slide.
         if (capacity <= 0 || (capacity === 1 && remaining > 1 && page.rows.length)) {
@@ -272,7 +353,8 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
         if (remaining - capacity === 1 && capacity > 1) capacity--;
         for (let i = 0; i < capacity; i++) {
           page.rows.push({
-            x: left, y: page.y, text: wrapped[offset + i], height,
+            x: rowLeft, y: page.y, width: rowWidth,
+            text: wrapped[offset + i], runs: styledLines[offset + i], height,
             size: styleSize, bold: sub, kind: block.type
           });
           page.y += height;
@@ -281,8 +363,8 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
         if (offset < wrapped.length) page = makePage(section.title, true);
       }
       // Preserve a visible separation between paragraphs without wasting a whole line.
-      if (page.y + GAP + LINE_HEIGHT <= BOTTOM) page.y += sub ? 6 : GAP;
+      if (page.y + GAP + LINE_HEIGHT <= contentBottom) page.y += sub ? 6 : GAP;
     }
   }
-  return { title: parsed.documentTitle, pages, blockCount: parsed.sections.reduce((n,s)=>n+s.blocks.length,0) };
+  return { title: parsed.documentTitle, pages, layout, blockCount: parsed.sections.reduce((n,s)=>n+s.blocks.length,0) };
 }

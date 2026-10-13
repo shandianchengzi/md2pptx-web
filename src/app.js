@@ -1,7 +1,8 @@
 import {
   SLIDE_W, SLIDE_H, EXAMPLE,
   layoutMarkdown, MIN_BODY_FONT_PT, MAX_BODY_FONT_PT,
-  DENSITY_FONT_PRESETS, resolveBodyFontPt
+  DENSITY_FONT_PRESETS, resolveBodyFontPt, DEFAULT_MARGINS_CM, resolveMarginsCm,
+  MIN_MARGIN_CM, MAX_MARGIN_CM
 } from './pagination.mjs';
 
 const $ = (id) => document.getElementById(id);
@@ -9,6 +10,12 @@ const editor = $('markdownInput');
 const titleInput = $('documentTitle');
 const density = $('density');
 const bodyFontInput = $('bodyFontPt');
+const marginInputs = {
+  top: $('marginTop'), bottom: $('marginBottom'),
+  left: $('marginLeft'), right: $('marginRight')
+};
+const footerTitleCheckbox = $('showFooterTitle');
+const pageNumberCheckbox = $('showPageNumber');
 const preview = $('slideCanvas');
 const frame = $('slideFrame');
 const thumbs = $('thumbnails');
@@ -26,22 +33,58 @@ let lastLength = 0;
 const SETTINGS_KEY = 'md2pptx-web:settings:v1';
 let bodyFontPt = DENSITY_FONT_PRESETS.comfortable;
 let previousDensity = density.value;
+let marginsCm = {...DEFAULT_MARGINS_CM};
+let showFooterTitle = false;
+let showPageNumber = false;
+
+function updateMarginInputs() {
+  for (const [key, input] of Object.entries(marginInputs)) input.value = marginsCm[key].toFixed(1);
+}
+function updateFooterInputs() {
+  footerTitleCheckbox.checked = showFooterTitle;
+  pageNumberCheckbox.checked = showPageNumber;
+}
+function onMarginInput(key, immediate = false) {
+  const raw = marginInputs[key].value.trim();
+  if (!raw) return;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return;
+  if (!immediate && (parsed < MIN_MARGIN_CM || parsed > MAX_MARGIN_CM)) return;
+  marginsCm = resolveMarginsCm({...marginsCm, [key]: parsed});
+  if (immediate) updateMarginInputs();
+  savePreferences();
+  if (immediate) regenerate(); else scheduleRegenerate();
+}
+function onFooterChange() {
+  showFooterTitle = footerTitleCheckbox.checked;
+  showPageNumber = pageNumberCheckbox.checked;
+  savePreferences();
+  regenerate();
+}
 
 function restorePreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
     if (saved && (saved.density === 'comfortable' || saved.density === 'compact')) density.value = saved.density;
     bodyFontPt = resolveBodyFontPt(saved?.bodyFontPt, density.value);
+    marginsCm = resolveMarginsCm(saved?.marginsCm);
+    showFooterTitle = saved?.showFooterTitle === true;
+    showPageNumber = saved?.showPageNumber === true;
   } catch {
     bodyFontPt = DENSITY_FONT_PRESETS[density.value];
+    marginsCm = {...DEFAULT_MARGINS_CM};
+    showFooterTitle = false;
+    showPageNumber = false;
   }
   previousDensity = density.value;
   bodyFontInput.value = String(bodyFontPt);
+  updateMarginInputs();
+  updateFooterInputs();
 }
 
 function savePreferences() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ density: density.value, bodyFontPt }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ density: density.value, bodyFontPt, marginsCm, showFooterTitle, showPageNumber }));
   } catch {
     // The editor and downloads remain usable when storage is unavailable.
   }
@@ -115,19 +158,39 @@ function paintSlide() {
     return;
   }
   preview.appendChild(element('div', 'decor-bar'));
-  preview.appendChild(element('div', 'decor-line'));
+  const divider = element('div', 'decor-line');
+  divider.style.left = page.layout.left + 'px';
+  divider.style.top = page.layout.titleDividerY + 'px';
+  divider.style.width = page.layout.width + 'px';
+  preview.appendChild(divider);
   for (const row of [...page.header, ...page.rows]) {
-    const el = element('div', 'slide-line kind-' + row.kind, row.text);
+    const el = element('div', 'slide-line kind-' + row.kind);
     el.style.left = row.x + 'px';
     el.style.top = row.y + 'px';
     el.style.fontSize = row.size + 'px';
     el.style.fontWeight = row.bold ? '750' : '450';
+    if (row.runs?.length) {
+      for (const run of row.runs) {
+        const span = element('span','',run.text);
+        if (run.bold) span.style.fontWeight = '750';
+        el.appendChild(span);
+      }
+    } else {
+      el.textContent = row.text;
+    }
     preview.appendChild(el);
   }
-  const footer = element('div', 'slide-footer');
-  footer.appendChild(element('span', '', 'MD2PPTX  /  ' + (deck.title || 'Presentation')));
-  footer.appendChild(element('span', '', String(activeSlide + 1) + ' / ' + deck.pages.length));
-  preview.appendChild(footer);
+  if (page.layout.showFooterTitle || page.layout.showPageNumber) {
+    const footer = element('div', 'slide-footer');
+    footer.style.left = page.layout.left + 'px';
+    footer.style.right = page.layout.right + 'px';
+    footer.style.top = page.layout.footerLineY + 'px';
+    footer.style.bottom = 'auto';
+    if (page.layout.showFooterTitle) footer.appendChild(element('span','',deck.title || 'Presentation'));
+    else footer.appendChild(element('span'));
+    if (page.layout.showPageNumber) footer.appendChild(element('span','',String(activeSlide+1)+' / '+deck.pages.length));
+    preview.appendChild(footer);
+  }
   resizeSlide();
 }
 
@@ -178,8 +241,8 @@ function regenerate() {
     try {
       deck = layoutMarkdown(editor.value, {
         title: titleInput.value.trim(),
-        density: density.value,
-        bodyFontPt
+        density: density.value, bodyFontPt, marginsCm,
+        showFooterTitle, showPageNumber
       }, measure);
       activeSlide = Math.max(0, Math.min(activeSlide, deck.pages.length - 1));
       message('已自动分页：' + deck.pages.length + ' 页。点击下方按钮下载可编辑 PPTX。');
@@ -210,11 +273,13 @@ function gotoSlide(nextIndex) {
 }
 
 function addTextRow(slide, row) {
-  const availableWidth = SLIDE_W - row.x - 77;
-  slide.addText(row.text, {
+  const textContent = row.runs?.some(run => run.bold)
+    ? row.runs.map(run => ({text:run.text, options:{bold: Boolean(run.bold)}}))
+    : row.text;
+  slide.addText(textContent, {
     x: row.x * UNIT,
     y: row.y * UNIT,
-    w: availableWidth * UNIT,
+    w: row.width * UNIT,
     h: Math.max(row.height, row.size * 1.3) * UNIT,
     margin: 0,
     fontFace: row.kind === 'code' ? 'Consolas' : 'Microsoft YaHei',
@@ -260,23 +325,35 @@ async function exportPptx() {
         line: { color: '224B65', transparency: 100 }, fill: { color: '224B65' }
       });
       slide.addShape(pptx.ShapeType.line, {
-        x: 78*UNIT, y: 132*UNIT, w: 1125*UNIT, h: 0,
+        x: page.layout.left*UNIT, y: page.layout.titleDividerY*UNIT,
+        w: page.layout.width*UNIT, h: 0,
         line: { color: 'E0E9EE', width: 1.1 }
       });
       [...page.header, ...page.rows].forEach(row => addTextRow(slide,row));
-      slide.addShape(pptx.ShapeType.line, {
-        x: 78*UNIT, y: 666*UNIT, w: 1125*UNIT, h: 0,
-        line: { color: 'E7EDF1', width: .7 }
-      });
-      slide.addText('MD2PPTX  /  ' + deck.title, {
-        x: 78*UNIT, y: 673*UNIT, w: 915*UNIT, h: 24*UNIT,
-        fontFace: 'Arial', fontSize: 10, color: '8DA2AF', margin: 0, valign: 'mid'
-      });
-      slide.addText(String(index+1) + ' / ' + deck.pages.length, {
-        x: 1090*UNIT, y: 673*UNIT, w: 108*UNIT, h: 24*UNIT,
-        fontFace: 'Arial', fontSize: 10, color: '8DA2AF', margin: 0,
-        align: 'right', valign: 'mid'
-      });
+      if (page.layout.showFooterTitle || page.layout.showPageNumber) {
+        slide.addShape(pptx.ShapeType.line, {
+          x: page.layout.left*UNIT, y: page.layout.footerLineY*UNIT,
+          w: page.layout.width*UNIT, h: 0,
+          line: { color: 'E7EDF1', width: .7 }
+        });
+        const footerY = page.layout.footerTextY * UNIT;
+        if (page.layout.showFooterTitle) {
+          slide.addText(deck.title, {
+            x: page.layout.left*UNIT, y: footerY,
+            w: Math.max(100, page.layout.width-140)*UNIT, h: 24*UNIT,
+            fontFace: 'Microsoft YaHei', fontSize: 10, color: '8DA2AF',
+            margin: 0, valign: 'mid'
+          });
+        }
+        if (page.layout.showPageNumber) {
+          slide.addText(String(index+1) + ' / ' + deck.pages.length, {
+            x: (page.layout.left+page.layout.width-110)*UNIT, y: footerY,
+            w: 110*UNIT, h: 24*UNIT,
+            fontFace: 'Arial', fontSize: 10, color: '8DA2AF', margin: 0,
+            align: 'right', valign: 'mid'
+          });
+        }
+      }
     });
     await pptx.writeFile({ fileName: sanitizeFileName(deck.title) + '.pptx' });
     message('PPTX 已生成：' + deck.pages.length + ' 页。可以在 PowerPoint 中逐字编辑。');
@@ -293,6 +370,12 @@ titleInput.addEventListener('input', scheduleRegenerate);
 density.addEventListener('change', onDensityChange);
 bodyFontInput.addEventListener('input', onFontInput);
 bodyFontInput.addEventListener('change', onFontChange);
+for (const key of Object.keys(marginInputs)) {
+  marginInputs[key].addEventListener('input', () => onMarginInput(key));
+  marginInputs[key].addEventListener('change', () => onMarginInput(key, true));
+}
+footerTitleCheckbox.addEventListener('change', onFooterChange);
+pageNumberCheckbox.addEventListener('change', onFooterChange);
 download.addEventListener('click', exportPptx);
 
 $('loadSample').addEventListener('click', () => {

@@ -68,7 +68,7 @@ try {
   assert.equal(constructorName, 'function', 'browser PPTX bundle must expose constructor');
 
   const body = '## Collector\n\n' +
-    'Collector 已经按照六类信息完成重构。LLM 与 EP-DSL 协同提取外设功能语义。'.repeat(60) +
+    'Collector **已经**按照六类信息完成重构。LLM 与 EP-DSL 协同提取外设功能语义。'.repeat(60) +
     '\n\n## Validator\n\n' +
     '必须根据固件输入与输出检查正确性。'.repeat(35);
   await page.locator('#markdownInput').fill(body);
@@ -77,6 +77,8 @@ try {
   assert.ok(total >= 4);
   const previewText = await page.locator('#slideCanvas').innerText();
   assert.match(previewText, /Collector 已经/);
+  assert.ok(await page.locator('.slide-line.kind-paragraph span[style*="750"]').count() > 0,
+    'preview must visually preserve Markdown bold');
   assert.equal(await page.locator('.thumb').count(), total);
   assert.equal(await page.locator('#status').evaluate(el=>el.classList.contains('error')), false);
   assert.equal(await page.locator('#bodyFontPt').inputValue(), '22');
@@ -93,6 +95,27 @@ try {
   await page.waitForFunction(() => Number(document.querySelector('#pageCount').textContent) >= 4);
   const resizedCount = Number(await page.locator('#pageCount').textContent());
   assert.equal(resizedCount, largerCount, 'restored font size must preserve pagination');
+  assert.equal(await page.locator('#showFooterTitle').isChecked(), false);
+  assert.equal(await page.locator('#showPageNumber').isChecked(), false);
+  await page.locator('#marginLeft').fill('3.5');
+  await page.locator('#marginRight').fill('4');
+  await page.locator('#marginTop').fill('2.5');
+  await page.locator('#marginBottom').fill('3');
+  await page.waitForFunction(() => {
+    const heading = document.querySelector('.slide-line.kind-title');
+    return heading && Math.abs(parseFloat(heading.style.left) - 3.5*1280/33.8666666667)<1
+      && Math.abs(parseFloat(heading.style.top) - 2.5*1280/33.8666666667)<1;
+  });
+  const customPageCount = Number(await page.locator('#pageCount').textContent());
+  await page.reload({waitUntil:'load'});
+  for (const [id,v] of [['marginLeft','3.5'],['marginRight','4.0'],['marginTop','2.5'],['marginBottom','3.0']])
+    assert.equal(await page.locator('#'+id).inputValue(),v,'margin persistence '+id);
+  assert.equal(await page.locator('#showFooterTitle').isChecked(),false);
+  assert.equal(await page.locator('#showPageNumber').isChecked(),false);
+  await page.locator('#markdownInput').fill(body);
+  await page.waitForFunction(() => Number(document.getElementById('pageCount').textContent)>=4);
+  assert.equal(Number(await page.locator('#pageCount').textContent()),customPageCount);
+  assert.equal(await page.locator('.slide-footer').count(), 0, 'footer must be hidden by default');
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 35000 }),
     page.locator('#downloadButton').click()
@@ -104,12 +127,32 @@ try {
   const zip = await JSZip.loadAsync(await readFile(output));
   assert.ok(zip.file('ppt/presentation.xml'), 'download must be an editable PowerPoint package');
   const slideFiles = Object.keys(zip.files).filter(p => /^ppt\/slides\/slide\d+\.xml$/.test(p));
-  assert.equal(slideFiles.length, resizedCount, 'preview and PPTX must have the same slide count');
+  assert.equal(slideFiles.length, customPageCount, 'preview and PPTX must have the same slide count');
   const xml = await zip.file(slideFiles[0]).async('string');
   assert.match(xml, /Collector/, 'PPTX should contain editable slide text');
   assert.match(xml, /sz="3000"/, 'exported slide must use the selected 30pt body font');
+  assert.match(xml, /b="1"/, 'exported rich-text runs must preserve Markdown bold');
+  assert.doesNotMatch(xml, /MD2PPTX/, 'slide content must not contain product watermark');
+  assert.doesNotMatch(xml, /Markdown Presentation/, 'optional footer title defaults to hidden');
+  await page.locator('#showFooterTitle').check();
+  await page.locator('#showPageNumber').check();
+  await page.waitForFunction(() => document.querySelector('.slide-footer')?.textContent?.includes(' / '));
+  const [footerDownload] = await Promise.all([
+    page.waitForEvent('download',{timeout:35000}),
+    page.locator('#downloadButton').click()
+  ]);
+  const footerOutput = join(downloadDir,'footer.pptx');
+  await footerDownload.saveAs(footerOutput);
+  const footerZip = await JSZip.loadAsync(await readFile(footerOutput));
+  const footerXml = await footerZip.file('ppt/slides/slide1.xml').async('string');
+  assert.match(footerXml, /Markdown Presentation/, 'enabled footer should show document title only');
+  assert.match(footerXml, /1 \/ /, 'enabled page numbers should show the page index');
+  assert.doesNotMatch(footerXml, /MD2PPTX/, 'enabled footer also must not include product watermark');
+  await page.reload({waitUntil:'load'});
+  assert.equal(await page.locator('#showFooterTitle').isChecked(),true);
+  assert.equal(await page.locator('#showPageNumber').isChecked(),true);
   assert.deepEqual(errors, [], 'browser console should have no runtime errors');
-  console.log('Browser E2E passed: ' + resizedCount + ' pages at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');
+  console.log('Browser E2E passed: ' + customPageCount + ' pages with custom margins, bold and footer options at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');
 } finally {
   if (browser) await browser.close();
   if (downloadDir) await rm(downloadDir, { recursive:true, force:true });

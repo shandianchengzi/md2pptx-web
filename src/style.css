@@ -73,3 +73,15 @@ h1,h2{font-size:22px;font-weight:760;margin:0 0 6px}
 .site-footer{text-align:center;color:#9aacb6;padding:0 16px 24px;font-size:11px}
 @media(max-width:1100px){.layout{grid-template-columns:1fr;max-width:1020px}.editor-panel{padding:22px}#markdownInput{height:340px;min-height:220px}.preview-panel{padding:22px}}
 @media(max-width:570px){.settings-grid{grid-template-columns:1fr 1fr}.settings-grid>.field:first-child{grid-column:1/-1}.site-header{height:auto;min-height:75px;padding:15px}.brand-subtitle{font-size:11px}.header-right{gap:4px}.privacy-pill{display:none}.layout{padding:12px;gap:12px}.editor-panel,.preview-panel{padding:16px;border-radius:12px}.panel-head,.preview-head{gap:8px}h1,h2{font-size:19px}.settings-grid{grid-template-columns:1fr 1fr}.field input,.field select{font-size:12px}.description{font-size:11.5px}.editor-foot span:last-child{display:none}.button-shortcut{display:none}.thumbnail-head span:last-child{display:none}.preview-foot{display:block}.preview-foot span:last-child{display:block;margin-top:2px}}
+
+.advanced-settings{border:1px solid #dce5eb;border-radius:10px;margin-top:14px;background:#f9fbfc;padding:13px 14px 11px}
+.advanced-settings summary{font-size:13px;font-weight:760;cursor:pointer;display:flex;align-items:center;gap:6px;color:#2e4d62}
+.advanced-settings summary small{font-size:11px;font-weight:400;color:#8a9eab}
+.margin-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px}
+.margin-grid .field{font-size:12px;gap:6px}
+.margin-grid .field input{min-width:0;text-align:center;font-variant-numeric:tabular-nums;padding:9px 5px;min-height:39px}
+.footer-settings{display:flex;flex-wrap:wrap;column-gap:18px;row-gap:10px;padding-top:13px;margin-top:13px;border-top:1px solid #e1eaf0}
+.toggle-label{display:flex;align-items:center;gap:7px;cursor:pointer;color:#49687c;font-size:12px}
+.toggle-label input{width:15px;height:15px;accent-color:#205875;margin:0}
+.settings-hint{color:#8b9cab;font-size:11px;line-height:1.55;margin:10px 0 0}
+@media(max-width:570px){.margin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

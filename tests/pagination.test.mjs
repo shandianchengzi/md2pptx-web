@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutMarkdown, parseMarkdown, wrapText, resolveBodyFontPt } from '../src/pagination.mjs';
+import { layoutMarkdown, parseMarkdown, wrapText, resolveBodyFontPt, resolveMarginsCm, parseBoldRuns, PX_PER_CM } from '../src/pagination.mjs';
 
 test('headings produce logical sections without losing content', () => {
   const doc = parseMarkdown('# Report\n\n## Collector\n\n测试内容。\n\n## Validator\n\nNext part.');
@@ -68,4 +68,44 @@ test('font size defaults and invalid settings are controlled', () => {
   assert.equal(resolveBodyFontPt('20','compact'),20);
   assert.equal(resolveBodyFontPt(200),22);
   assert.equal(resolveBodyFontPt(''),22);
+});
+
+test('four margins change exact header placement and usable area', () => {
+  const md = '## Collector\n\n' + '根据固件测试分析生成规则。'.repeat(170);
+  const a = layoutMarkdown(md, {marginsCm:{top:1.5,bottom:2.2,left:2.1,right:2.1}});
+  const b = layoutMarkdown(md, {marginsCm:{top:3.0,bottom:4.0,left:4.0,right:4.0}});
+  assert.ok(b.pages.length > a.pages.length, 'larger margins should produce more pages');
+  assert.ok(Math.abs(b.pages[0].header[0].x - 4*PX_PER_CM) < .01);
+  assert.ok(Math.abs(b.pages[0].header[0].y - 3*PX_PER_CM) < .01);
+  assert.ok(b.pages.every(page=>page.rows.every(row => row.y+row.height <= page.layout.contentBottom + .001)));
+  assert.ok(b.pages.every(page=>page.rows.every(row => row.x+row.width <= 1280-4*PX_PER_CM + .01)));
+  assert.equal(a.pages.flatMap(p=>p.rows).map(r=>r.text).join('').replace(/\s/g,''),
+    b.pages.flatMap(p=>p.rows).map(r=>r.text).join('').replace(/\s/g,''));
+});
+test('margin presets clamp invalid inputs without changing defaults', () => {
+  assert.deepEqual(resolveMarginsCm(), {top:1.5,bottom:2.2,left:2.1,right:2.1});
+  assert.deepEqual(resolveMarginsCm({top:-10,left:99,bottom:NaN,right:""}),
+    {top:.5,bottom:2.2,left:5,right:2.1});
+});
+test('bold Markdown survives parsing, wrapping, and page breaks', () => {
+  const runs = parseBoldRuns('前面 **重要事实** 和 __特殊处理__。');
+  assert.equal(runs.map(x=>x.text).join(''), '前面 重要事实 和 特殊处理。');
+  assert.deepEqual(runs.filter(x=>x.bold).map(x=>x.text), ['重要事实','特殊处理']);
+  const result = layoutMarkdown('## Test\n\n' + '这段文字说明 **重要事实**，需要进行对照。'.repeat(150),
+    {bodyFontPt:30, marginsCm:{top:4,bottom:4,left:4,right:4}});
+  const bodyRows = result.pages.flatMap(p=>p.rows).filter(r=>r.kind==='paragraph');
+  assert.ok(result.pages.length>2);
+  assert.ok(bodyRows.some(r=>r.runs?.some(x=>x.bold && x.text.includes('重要事实'))));
+  for (const row of bodyRows) {
+    assert.equal(row.runs.map(r=>r.text).join(''),row.text,'rich runs must preserve line text');
+  }
+});
+test('footer title and page numbers are optional and off by default', () => {
+  const a = layoutMarkdown('## Test\n\nSome text.');
+  assert.equal(a.layout.showFooterTitle,false);
+  assert.equal(a.layout.showPageNumber,false);
+  const b = layoutMarkdown('## Test\n\nSome text.',{showFooterTitle:true,showPageNumber:true});
+  assert.equal(b.layout.showFooterTitle,true);
+  assert.equal(b.layout.showPageNumber,true);
+  assert.ok(b.layout.contentBottom<a.layout.contentBottom);
 });
