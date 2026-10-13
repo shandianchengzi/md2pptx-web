@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Markdown / plain text to editable PowerPoint with instant live preview. Browser-only processing.">
+  <meta name="theme-color" content="#122d43">
+  <title>MD2PPTX — Markdown to PowerPoint</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="branding">
+      <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div>
+        <div class="brand-name">MD2PPTX <span class="brand-web">WEB</span></div>
+        <div class="brand-subtitle">Markdown to editable PowerPoint</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="privacy-pill"><span class="privacy-dot"></span> 浏览器本地转换</span>
+      <a href="https://github.com/shandianchengzi/md2pptx-web" target="_blank" rel="noopener noreferrer" class="github-link">GitHub ↗</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="editor-panel" aria-label="Markdown input">
+      <div class="panel-head">
+        <div>
+          <div class="eyebrow">INPUT</div>
+          <h1>Markdown 输入</h1>
+          <p class="description">粘贴长文后即刻自动拆页，无需手动添加分页符。</p>
+        </div>
+        <button id="loadSample" class="subtle-button" type="button">示例</button>
+      </div>
+      <div class="settings-grid">
+        <label class="field"><span>文档标题 <small>可选</small></span><input id="documentTitle" placeholder="默认从 Markdown 标题读取" autocomplete="off"></label>
+        <label class="field"><span>排版密度</span><select id="density"><option value="comfortable">易读 · 大字体</option><option value="compact">紧凑 · 更多文字</option></select></label>
+      </div>
+      <div class="editor-label">
+        <span>Markdown / Plain Text</span>
+        <div class="editor-actions"><label class="text-link file-picker" for="fileInput">导入 .md / .txt</label><input id="fileInput" type="file" accept=".md,.markdown,.txt,text/plain,text/markdown" hidden><button type="button" class="text-link" id="clearInput">清空</button></div>
+      </div>
+      <textarea id="markdownInput" spellcheck="false" placeholder="# 项目进展汇报&#10;&#10;## 当前实现&#10;&#10;粘贴中文长文或 Markdown，右侧会自动生成幻灯片预览。&#10;&#10;## 下一步工作&#10;&#10;内容会自动拆分到多页，并导出为可编辑 PPTX。"></textarea>
+      <div class="editor-foot">
+        <span id="textStats" aria-live="polite">0 字 · 0 段</span>
+        <span>支持 # 标题、列表、引用和代码块</span>
+      </div>
+      <button id="downloadButton" class="primary-button" type="button" disabled>
+        <span class="button-icon">⇩</span>
+        <span>下载可编辑 PPTX</span>
+        <span class="button-shortcut">Ctrl + Enter</span>
+      </button>
+      <p id="status" class="status" role="status" aria-live="polite">粘贴内容后将自动显示预览。</p>
+    </section>
+
+    <section class="preview-panel" aria-label="Live slide preview">
+      <div class="preview-head">
+        <div>
+          <div class="eyebrow">LIVE PREVIEW</div>
+          <h2>实时幻灯片预览</h2>
+          <p class="description">输入后自动更新 · 16:9 · 所有文字均可在 PPT 中编辑</p>
+        </div>
+        <div class="page-counter"><strong id="pageCount">0</strong><span>页</span></div>
+      </div>
+      <div class="preview-toolbar">
+        <div id="slidePosition" class="slide-position">第 0 / 0 页</div>
+        <div class="page-navigation">
+          <button id="prevSlide" title="Previous slide" aria-label="上一页" type="button">←</button>
+          <button id="nextSlide" title="Next slide" aria-label="下一页" type="button">→</button>
+        </div>
+      </div>
+      <div class="slide-frame" id="slideFrame">
+        <div class="slide-canvas" id="slideCanvas" aria-label="Current slide preview"></div>
+      </div>
+      <div class="thumbnail-head"><span>所有页面</span><span id="slideHint">选择缩略图切换页面</span></div>
+      <div id="thumbnails" class="thumbnails" role="listbox" aria-label="幻灯片列表"></div>
+      <div class="preview-foot">
+        <span>预览使用与 PPTX 相同的分页模型；不同设备字体可能导致细微差异。</span>
+        <span>不上传正文 · 不保存输入</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">MD2PPTX · Open source · Built for research notes and long-form documents</footer>
+  <script src="./vendor/pptxgen.min.js"></script>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
