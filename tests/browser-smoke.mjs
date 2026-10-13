@@ -101,6 +101,9 @@ try {
   await page.locator('#marginRight').fill('4');
   await page.locator('#marginTop').fill('2.5');
   await page.locator('#marginBottom').fill('3');
+  // Commit the last input synchronously instead of reading the slide count
+  // while the 90 ms live-preview debounce is still pending.
+  await page.locator('#marginBottom').dispatchEvent('change');
   await page.waitForFunction(() => {
     const heading = document.querySelector('.slide-line.kind-title');
     return heading && Math.abs(parseFloat(heading.style.left) - 3.5*1280/33.8666666667)<1
@@ -113,7 +116,7 @@ try {
   assert.equal(await page.locator('#showFooterTitle').isChecked(),false);
   assert.equal(await page.locator('#showPageNumber').isChecked(),false);
   await page.locator('#markdownInput').fill(body);
-  await page.waitForFunction(() => Number(document.getElementById('pageCount').textContent)>=4);
+  await page.waitForFunction(expected => Number(document.getElementById('pageCount').textContent)===expected, customPageCount);
   assert.equal(Number(await page.locator('#pageCount').textContent()),customPageCount);
   assert.equal(await page.locator('.slide-footer').count(), 0, 'footer must be hidden by default');
   const [download] = await Promise.all([
