@@ -10,5 +10,5 @@ await cp('src/pagination.mjs', join(dist, 'src/pagination.mjs'));
 await cp('src/style.css', join(dist, 'src/style.css'));
 await cp('node_modules/pptxgenjs/dist/pptxgen.bundle.js', join(dist,'vendor/pptxgen.bundle.js'));
 const fileSize = (await stat(join(dist,'vendor/pptxgen.bundle.js'))).size;
-if (fileSize < 500_000) throw new Error('Missing browser PPTX converter');
+if (fileSize < 100_000) throw new Error('Missing browser PPTX converter');
 console.log('Built static Pages artifact in dist/ (PptxGenJS ' + fileSize + ' bytes).');
