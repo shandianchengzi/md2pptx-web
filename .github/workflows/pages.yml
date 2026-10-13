@@ -33,7 +33,7 @@ jobs:
       - name: Mirror built Pages site to Cloudflare
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         continue-on-error: true
-        uses: shandianchengzi/skill/manage-github-pages/cloudflare-backup@4c1bf8604fc78dabb0babc83bfa0e2c1fa645327
+        uses: ./.github/actions/cloudflare-backup
         with:
           directory: dist
           project: sdz-md2pptx-web
