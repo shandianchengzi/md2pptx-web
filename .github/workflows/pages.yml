@@ -30,6 +30,8 @@ jobs:
         run: npm test
       - name: Build standalone site
         run: npm run build
+      - name: Verify live preview and browser PPTX export
+        run: npm run test:browser
       - name: Configure Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
