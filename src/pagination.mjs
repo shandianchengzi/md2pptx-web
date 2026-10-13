@@ -47,11 +47,16 @@ export function stripInline(value) {
 }
 
 function normalizeParagraph(lines) {
+  // A single Markdown newline is a soft wrap. Preserve a visible boundary
+  // when an English word is immediately followed by Chinese text.
   return lines.reduce((out, line) => {
     if (!out) return line;
     const prev = out.slice(-1);
     const next = line[0] || '';
-    return out + (/[A-Za-z0-9,.;:]$/.test(prev) && /^[A-Za-z0-9]/.test(next) ? ' ' : '') + line;
+    const needSpace = /[A-Za-z0-9]$/.test(prev) || (
+      /[\u4e00-\u9fff]/.test(prev) && /^[A-Za-z0-9]/.test(next)
+    );
+    return out + (needSpace ? ' ' : '') + line;
   }, '');
 }
 
@@ -145,31 +150,48 @@ export function defaultMeasure(text, px) {
     /[ilI1|.,:;'\s]/.test(char) ? .3 : .56), 0);
 }
 
+// Browser and Node support Intl.Segmenter: split Han words at readable
+// boundaries while retaining complete Latin words and punctuation.
+// Unlike splitting on whitespace, a long Chinese phrase no longer pushes
+// a short leading English word onto its own line.
+const wordSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter('zh-CN', { granularity: 'word' })
+  : null;
+
+function wordPieces(text) {
+  if (wordSegmenter) return Array.from(wordSegmenter.segment(text), x => x.segment);
+  return text.match(/[A-Za-z0-9_-]+|[\u4e00-\u9fff]|\s+|./gu) || [];
+}
+
 export function wrapText(text, width, fontSize, measure = defaultMeasure) {
   const result = [];
-  const paragraphs = String(text).split('\n');
-  for (const paragraph of paragraphs) {
+  const availableWidth = Math.max(fontSize, width - fontSize * 0.35);
+  for (const paragraph of String(text).split('\n')) {
     if (!paragraph) { result.push(' '); continue; }
     let line = '';
-    const tokens = paragraph.match(/\S+\s*|\s+/gu) || [];
-    for (let token of tokens) {
-      if (!line && !token.trim()) continue;
-      if (measure(line + token, fontSize) <= width) {
-        line += token;
+    function flush() {
+      if (line.trim()) result.push(line.trimEnd());
+      line = '';
+    }
+    for (const piece of wordPieces(paragraph)) {
+      if (!line && !piece.trim()) continue;
+      const candidate = line + piece;
+      if (measure(candidate, fontSize) <= availableWidth) {
+        line = candidate;
         continue;
       }
-      if (line.trim()) { result.push(line.trimEnd()); line = ''; }
-      if (measure(token, fontSize) <= width) { line = token.trimStart(); continue; }
-      // A long Chinese phrase or URL must be broken inside the token.
-      for (const char of Array.from(token)) {
-        if (line && measure(line + char, fontSize) > width) {
-          result.push(line.trimEnd());
-          line = '';
-        }
+      if (piece.trim() && line.trim()) flush();
+      if (measure(piece.trimStart(), fontSize) <= availableWidth) {
+        line = piece.trimStart();
+        continue;
+      }
+      // Extremely long URL / non-breaking word: split only as fallback.
+      for (const char of Array.from(piece.trimStart())) {
+        if (line && measure(line + char, fontSize) > availableWidth) flush();
         line += char;
       }
     }
-    if (line.trim()) result.push(line.trimEnd());
+    flush();
   }
   return result.length ? result : [''];
 }
