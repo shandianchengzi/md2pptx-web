@@ -1,0 +1,45 @@
+# Local vendored copy of shandianchengzi/skill/manage-github-pages/cloudflare-backup
+# Required because the upstream Skill repository is private and public Actions cannot resolve it.
+name: Cloudflare Pages mirror
+description: Deploy the existing GitHub Pages output to Cloudflare, preserving project-site paths.
+inputs:
+  directory:
+    description: The already-built static site directory.
+    required: true
+  project:
+    description: Cloudflare Pages project name (lowercase, hyphens).
+    required: true
+  site-prefix:
+    description: GitHub Pages project path prefix, empty for user website.
+    required: false
+    default: ''
+  production-branch:
+    description: Git publishing branch.
+    required: false
+    default: main
+  cloudflare-api-token:
+    description: Cloudflare token with Pages Edit permission.
+    required: false
+    default: ''
+  cloudflare-account-id:
+    description: Cloudflare account identifier.
+    required: false
+    default: ''
+  large-file-policy:
+    description: fail (default), or skip unsupported files larger than 25 MiB.
+    required: false
+    default: fail
+runs:
+  using: composite
+  steps:
+    - name: Upload independent backup
+      shell: bash
+      env:
+        MIRROR_DIR: ${{ inputs.directory }}
+        MIRROR_PROJECT: ${{ inputs.project }}
+        MIRROR_PREFIX: ${{ inputs.site-prefix }}
+        MIRROR_BRANCH: ${{ inputs.production-branch }}
+        MIRROR_LARGE_POLICY: ${{ inputs.large-file-policy }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+      run: bash "$GITHUB_ACTION_PATH/deploy.sh"
