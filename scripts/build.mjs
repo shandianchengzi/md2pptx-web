@@ -5,6 +5,7 @@ const dist = 'dist';
 await mkdir(join(dist, 'src'), { recursive: true });
 await mkdir(join(dist, 'vendor'), { recursive: true });
 await cp('index.html', join(dist, 'index.html'));
+await cp('favicon.svg', join(dist, 'favicon.svg'));
 await cp('src/app.js', join(dist, 'src/app.js'));
 await cp('src/pagination.mjs', join(dist, 'src/pagination.mjs'));
 await cp('src/style.css', join(dist, 'src/style.css'));
