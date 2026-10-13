@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutMarkdown, parseMarkdown, wrapText } from '../src/pagination.mjs';
+import { layoutMarkdown, parseMarkdown, wrapText, resolveBodyFontPt } from '../src/pagination.mjs';
 
 test('headings produce logical sections without losing content', () => {
   const doc = parseMarkdown('# Report\n\n## Collector\n\n测试内容。\n\n## Validator\n\nNext part.');
@@ -45,4 +45,27 @@ test('avoids orphan paragraph lines at bottom of slides', () => {
   const doc = layoutMarkdown('## Collector\n\n' + long);
   const tail = doc.pages.map(p => p.rows.length);
   assert.ok(tail.every(count => count >= 2), JSON.stringify(tail));
+});
+
+test('editable body font sizes use actual PowerPoint points', () => {
+  const content = '## Collector\n\n' + 'AgentEmu 包含寄存器和事件语义。'.repeat(250);
+  const small = layoutMarkdown(content, {bodyFontPt: 16});
+  const large = layoutMarkdown(content, {bodyFontPt: 30});
+  assert.ok(small.pages.length < large.pages.length, 'larger body fonts should need more slides');
+  const smallBody = small.pages.flatMap(p=>p.rows).find(r=>r.kind === 'paragraph');
+  const largeBody = large.pages.flatMap(p=>p.rows).find(r=>r.kind === 'paragraph');
+  assert.ok(Math.abs(smallBody.size * .75 - 16) < .1);
+  assert.ok(Math.abs(largeBody.size * .75 - 30) < .1);
+  for (const output of [small, large]) {
+    const actual = output.pages.flatMap(p=>p.rows).map(r=>r.text).join('');
+    assert.equal(actual, 'AgentEmu 包含寄存器和事件语义。'.repeat(250));
+    assert.ok(output.pages.every(p=>p.rows.every(r=>r.y+r.height<=635)), 'rows must fit within page');
+  }
+});
+test('font size defaults and invalid settings are controlled', () => {
+  assert.equal(resolveBodyFontPt(undefined,'comfortable'),22);
+  assert.equal(resolveBodyFontPt(undefined,'compact'),19);
+  assert.equal(resolveBodyFontPt('20','compact'),20);
+  assert.equal(resolveBodyFontPt(200),22);
+  assert.equal(resolveBodyFontPt(''),22);
 });

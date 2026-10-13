@@ -8,6 +8,7 @@ A privacy-friendly static Markdown / plain-text to editable PowerPoint converter
 - Large, editable PowerPoint text, with automatic page breaking and section headings.
 - Download `.pptx` directly in the browser. Files are generated locally, without uploading source text.
 - Import `.md` / `.txt`, select slide density, and use the sample document.
+- Customize the default body font size (14–36 pt; 22 pt standard, 19 pt compact). The selected value controls both automatic pagination and editable PPTX text and is stored in this browser's localStorage (not uploaded).
 - GitHub Pages deployment through `.github/workflows/pages.yml`.
 
 ## Deploy

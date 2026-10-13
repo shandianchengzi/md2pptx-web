@@ -1,12 +1,14 @@
 import {
   SLIDE_W, SLIDE_H, EXAMPLE,
-  layoutMarkdown
+  layoutMarkdown, MIN_BODY_FONT_PT, MAX_BODY_FONT_PT,
+  DENSITY_FONT_PRESETS, resolveBodyFontPt
 } from './pagination.mjs';
 
 const $ = (id) => document.getElementById(id);
 const editor = $('markdownInput');
 const titleInput = $('documentTitle');
 const density = $('density');
+const bodyFontInput = $('bodyFontPt');
 const preview = $('slideCanvas');
 const frame = $('slideFrame');
 const thumbs = $('thumbnails');
@@ -21,6 +23,60 @@ let deck = { title: '', pages: [], blockCount: 0 };
 let activeSlide = 0;
 let pending = null;
 let lastLength = 0;
+const SETTINGS_KEY = 'md2pptx-web:settings:v1';
+let bodyFontPt = DENSITY_FONT_PRESETS.comfortable;
+let previousDensity = density.value;
+
+function restorePreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    if (saved && (saved.density === 'comfortable' || saved.density === 'compact')) density.value = saved.density;
+    bodyFontPt = resolveBodyFontPt(saved?.bodyFontPt, density.value);
+  } catch {
+    bodyFontPt = DENSITY_FONT_PRESETS[density.value];
+  }
+  previousDensity = density.value;
+  bodyFontInput.value = String(bodyFontPt);
+}
+
+function savePreferences() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ density: density.value, bodyFontPt }));
+  } catch {
+    // The editor and downloads remain usable when storage is unavailable.
+  }
+}
+
+function onFontInput() {
+  const raw = bodyFontInput.value.trim();
+  if (!/^\d+$/.test(raw)) return;
+  const pt = Number(raw);
+  if (pt < MIN_BODY_FONT_PT || pt > MAX_BODY_FONT_PT) return;
+  bodyFontPt = pt;
+  savePreferences();
+  scheduleRegenerate();
+}
+
+function onFontChange() {
+  const pt = Number(bodyFontInput.value);
+  bodyFontPt = Number.isFinite(pt)
+    ? Math.max(MIN_BODY_FONT_PT, Math.min(MAX_BODY_FONT_PT, Math.round(pt)))
+    : bodyFontPt;
+  bodyFontInput.value = String(bodyFontPt);
+  savePreferences();
+  regenerate();
+}
+
+function onDensityChange() {
+  const priorPreset = DENSITY_FONT_PRESETS[previousDensity];
+  // Switching a preset should not overwrite a manually customized size.
+  if (bodyFontPt === priorPreset) bodyFontPt = DENSITY_FONT_PRESETS[density.value];
+  previousDensity = density.value;
+  bodyFontInput.value = String(bodyFontPt);
+  savePreferences();
+  regenerate();
+}
+
 
 function measure(text, size) {
   if (!context) return Array.from(text).length * size;
@@ -122,7 +178,8 @@ function regenerate() {
     try {
       deck = layoutMarkdown(editor.value, {
         title: titleInput.value.trim(),
-        density: density.value
+        density: density.value,
+        bodyFontPt
       }, measure);
       activeSlide = Math.max(0, Math.min(activeSlide, deck.pages.length - 1));
       message('已自动分页：' + deck.pages.length + ' 页。点击下方按钮下载可编辑 PPTX。');
@@ -233,7 +290,9 @@ async function exportPptx() {
 
 editor.addEventListener('input', scheduleRegenerate);
 titleInput.addEventListener('input', scheduleRegenerate);
-density.addEventListener('change', regenerate);
+density.addEventListener('change', onDensityChange);
+bodyFontInput.addEventListener('input', onFontInput);
+bodyFontInput.addEventListener('change', onFontChange);
 download.addEventListener('click', exportPptx);
 
 $('loadSample').addEventListener('click', () => {
@@ -280,4 +339,5 @@ document.addEventListener('keydown', event => {
 const resize = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resizeSlide) : null;
 if (resize) resize.observe(frame);
 window.addEventListener('resize', resizeSlide);
+restorePreferences();
 regenerate();

@@ -79,6 +79,20 @@ try {
   assert.match(previewText, /Collector 已经/);
   assert.equal(await page.locator('.thumb').count(), total);
   assert.equal(await page.locator('#status').evaluate(el=>el.classList.contains('error')), false);
+  assert.equal(await page.locator('#bodyFontPt').inputValue(), '22');
+  await page.locator('#bodyFontPt').fill('30');
+  await page.waitForFunction(() => {
+    const row = document.querySelector('.slide-line.kind-paragraph');
+    return row && Number.parseFloat(row.style.fontSize) >= 39.9;
+  });
+  const largerCount = Number(await page.locator('#pageCount').textContent());
+  assert.ok(largerCount >= total, 'font increase should not reduce page count');
+  await page.reload({waitUntil:'load'});
+  assert.equal(await page.locator('#bodyFontPt').inputValue(), '30', 'font size preference must persist');
+  await page.locator('#markdownInput').fill(body);
+  await page.waitForFunction(() => Number(document.querySelector('#pageCount').textContent) >= 4);
+  const resizedCount = Number(await page.locator('#pageCount').textContent());
+  assert.equal(resizedCount, largerCount, 'restored font size must preserve pagination');
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 35000 }),
     page.locator('#downloadButton').click()
@@ -90,11 +104,12 @@ try {
   const zip = await JSZip.loadAsync(await readFile(output));
   assert.ok(zip.file('ppt/presentation.xml'), 'download must be an editable PowerPoint package');
   const slideFiles = Object.keys(zip.files).filter(p => /^ppt\/slides\/slide\d+\.xml$/.test(p));
-  assert.equal(slideFiles.length, total, 'preview and PPTX must have the same slide count');
+  assert.equal(slideFiles.length, resizedCount, 'preview and PPTX must have the same slide count');
   const xml = await zip.file(slideFiles[0]).async('string');
   assert.match(xml, /Collector/, 'PPTX should contain editable slide text');
+  assert.match(xml, /sz="3000"/, 'exported slide must use the selected 30pt body font');
   assert.deepEqual(errors, [], 'browser console should have no runtime errors');
-  console.log('Browser E2E passed: ' + total + ' preview pages, valid ' + (await stat(output)).size + '-byte PPTX');
+  console.log('Browser E2E passed: ' + resizedCount + ' pages at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');
 } finally {
   if (browser) await browser.close();
   if (downloadDir) await rm(downloadDir, { recursive:true, force:true });

@@ -196,12 +196,24 @@ export function wrapText(text, width, fontSize, measure = defaultMeasure) {
   return result.length ? result : [''];
 }
 
+export const MIN_BODY_FONT_PT = 14;
+export const MAX_BODY_FONT_PT = 36;
+export const DENSITY_FONT_PRESETS = Object.freeze({comfortable: 22, compact: 19});
+
+export function resolveBodyFontPt(value, density = 'comfortable') {
+  const preset = DENSITY_FONT_PRESETS[density] ?? DENSITY_FONT_PRESETS.comfortable;
+  if (value === undefined || value === null || value === '') return preset;
+  const pt = Number(value);
+  return Number.isInteger(pt) && pt >= MIN_BODY_FONT_PT && pt <= MAX_BODY_FONT_PT ? pt : preset;
+}
+
 export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure) {
   const parsed = parseMarkdown(markdown, options.title);
   const compact = options.density === 'compact';
-  const BODY_FONT = compact ? 25 : 29;
-  const LINE_HEIGHT = compact ? 37 : 44;
-  const GAP = compact ? 12 : 17;
+  const bodyFontPt = resolveBodyFontPt(options.bodyFontPt, options.density);
+  const BODY_FONT = Math.round(bodyFontPt * (4 / 3) * 10) / 10;
+  const LINE_HEIGHT = Math.ceil(BODY_FONT * (compact ? 1.48 : 1.52));
+  const GAP = Math.round(BODY_FONT * (compact ? 0.48 : 0.59));
   const pages = [];
 
   function titleRows(title, continued) {
@@ -234,8 +246,10 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
       }
       const sub = block.type === 'subheading';
       const code = block.type === 'code';
-      const styleSize = sub ? 30 : code ? (compact ? 20 : 23) : BODY_FONT;
-      const height = sub ? 45 : code ? (compact ? 30 : 35) : LINE_HEIGHT;
+      const styleSize = sub ? Math.max(30, Math.round(BODY_FONT * 1.07))
+        : code ? Math.max(18, Math.round(BODY_FONT * .8)) : BODY_FONT;
+      const height = sub ? Math.ceil(styleSize * 1.5)
+        : code ? Math.ceil(styleSize * 1.5) : LINE_HEIGHT;
       const left = BODY_LEFT + (block.type === 'quote' ? 21 : code ? 18 : 0);
       const width = BODY_WIDTH - (left - BODY_LEFT) - 9;
       const wrapped = wrapText(block.text, width, styleSize, measure);
