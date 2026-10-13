@@ -30,6 +30,16 @@ jobs:
         run: npm test
       - name: Build standalone site
         run: npm run build
+      - name: Mirror built Pages site to Cloudflare
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: shandianchengzi/skill/manage-github-pages/cloudflare-backup@4c1bf8604fc78dabb0babc83bfa0e2c1fa645327
+        with:
+          directory: dist
+          project: sdz-md2pptx-web
+          site-prefix: md2pptx-web
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Verify live preview and browser PPTX export
         run: npm run test:browser
       - name: Configure Pages
