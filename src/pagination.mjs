@@ -180,7 +180,13 @@ export function wrapText(text, width, fontSize, measure = defaultMeasure) {
         line = candidate;
         continue;
       }
-      if (piece.trim() && line.trim()) flush();
+      // A whitespace token can itself overflow the line; flush the line
+      // before dropping that whitespace, otherwise the existing text is lost.
+      if (!piece.trim()) {
+        flush();
+        continue;
+      }
+      if (line.trim()) flush();
       if (measure(piece.trimStart(), fontSize) <= availableWidth) {
         line = piece.trimStart();
         continue;
