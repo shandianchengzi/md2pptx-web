@@ -34,3 +34,15 @@ test('wrapText never exceeds width under same measure function', () => {
   const wrapped = wrapText('中文混排英文字母ABC', 70, 23, measure);
   assert.ok(wrapped.every(line=>measure(line)<=70));
 });
+
+test('mixed Chinese and English share one line when room is available', () => {
+  const lines = wrapText('Collector 已经完成重构，LLM 可以继续抽取内容。', 350, 29);
+  assert.match(lines[0], /Collector 已经/);
+  assert.equal(lines.join('').replace(/\s/g, ''), 'Collector已经完成重构，LLM可以继续抽取内容。');
+});
+test('avoids orphan paragraph lines at bottom of slides', () => {
+  const long = '我们需要根据参考手册检查外设规则是否完整。'.repeat(45);
+  const doc = layoutMarkdown('## Collector\n\n' + long);
+  const tail = doc.pages.map(p => p.rows.length);
+  assert.ok(tail.every(count => count >= 2), JSON.stringify(tail));
+});
