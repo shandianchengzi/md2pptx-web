@@ -1,0 +1,14 @@
+import { cp, mkdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+
+const dist = 'dist';
+await mkdir(join(dist, 'src'), { recursive: true });
+await mkdir(join(dist, 'vendor'), { recursive: true });
+await cp('index.html', join(dist, 'index.html'));
+await cp('src/app.js', join(dist, 'src/app.js'));
+await cp('src/pagination.mjs', join(dist, 'src/pagination.mjs'));
+await cp('src/style.css', join(dist, 'src/style.css'));
+await cp('node_modules/pptxgenjs/dist/pptxgen.min.js', join(dist,'vendor/pptxgen.min.js'));
+const fileSize = (await stat(join(dist,'vendor/pptxgen.min.js'))).size;
+if (fileSize < 100_000) throw new Error('Missing browser PPTX converter');
+console.log('Built static Pages artifact in dist/ (PptxGenJS ' + fileSize + ' bytes).');
