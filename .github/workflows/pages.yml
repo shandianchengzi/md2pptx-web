@@ -33,13 +33,15 @@ jobs:
       - name: Mirror built Pages site to Cloudflare
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         continue-on-error: true
-        uses: ./.github/actions/cloudflare-backup
-        with:
-          directory: dist
-          project: sdz-md2pptx-web
-          site-prefix: md2pptx-web
-          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        env:
+          MIRROR_DIR: dist
+          MIRROR_PROJECT: sdz-md2pptx-web
+          MIRROR_PREFIX: md2pptx-web
+          MIRROR_BRANCH: main
+          MIRROR_LARGE_POLICY: fail
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash .github/scripts/cloudflare-pages-backup.sh
       - name: Verify live preview and browser PPTX export
         run: npm run test:browser
       - name: Configure Pages
