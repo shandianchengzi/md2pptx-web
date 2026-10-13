@@ -58,7 +58,7 @@ test('editable body font sizes use actual PowerPoint points', () => {
   assert.ok(Math.abs(largeBody.size * .75 - 30) < .1);
   for (const output of [small, large]) {
     const actual = output.pages.flatMap(p=>p.rows).map(r=>r.text).join('');
-    assert.equal(actual.replace(/\\s/g, ''), 'AgentEmu 包含寄存器和事件语义。'.repeat(250).replace(/\\s/g, ''));
+    assert.equal(actual.replace(/\s/g, ''), 'AgentEmu 包含寄存器和事件语义。'.repeat(250).replace(/\s/g, ''));
     assert.ok(output.pages.every(p=>p.rows.every(r=>r.y+r.height<=635)), 'rows must fit within page');
   }
 });
