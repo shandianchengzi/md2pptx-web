@@ -239,13 +239,26 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
       const left = BODY_LEFT + (block.type === 'quote' ? 21 : code ? 18 : 0);
       const width = BODY_WIDTH - (left - BODY_LEFT) - 9;
       const wrapped = wrapText(block.text, width, styleSize, measure);
-      for (const line of wrapped) {
-        if (page.y + height > BOTTOM) page = makePage(section.title, true);
-        page.rows.push({
-          x: left, y: page.y, text: line, height,
-          size: styleSize, bold: sub, kind: block.type
-        });
-        page.y += height;
+      let offset = 0;
+      while (offset < wrapped.length) {
+        let capacity = Math.floor((BOTTOM - page.y) / height);
+        const remaining = wrapped.length - offset;
+        // Avoid leaving a single line of a long paragraph on either slide.
+        if (capacity <= 0 || (capacity === 1 && remaining > 1 && page.rows.length)) {
+          page = makePage(section.title, true);
+          continue;
+        }
+        capacity = Math.min(capacity, remaining);
+        if (remaining - capacity === 1 && capacity > 1) capacity--;
+        for (let i = 0; i < capacity; i++) {
+          page.rows.push({
+            x: left, y: page.y, text: wrapped[offset + i], height,
+            size: styleSize, bold: sub, kind: block.type
+          });
+          page.y += height;
+        }
+        offset += capacity;
+        if (offset < wrapped.length) page = makePage(section.title, true);
       }
       // Preserve a visible separation between paragraphs without wasting a whole line.
       if (page.y + GAP + LINE_HEIGHT <= BOTTOM) page.y += sub ? 6 : GAP;
