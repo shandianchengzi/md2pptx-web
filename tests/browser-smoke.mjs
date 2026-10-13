@@ -8,14 +8,15 @@ import JSZip from 'jszip';
 
 const prefix = '/md2pptx-web/';
 const allowed = new Set([
-  'index.html', 'src/app.js', 'src/pagination.mjs',
+  'index.html', 'favicon.svg', 'src/app.js', 'src/pagination.mjs',
   'src/style.css', 'vendor/pptxgen.bundle.js'
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8'
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml'
 };
 const server = createServer(async (req, res) => {
   try {
