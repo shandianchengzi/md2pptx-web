@@ -13,6 +13,7 @@
     "pptxgenjs": "4.0.0"
   },
   "devDependencies": {
-    "playwright-core": "1.56.1"
+    "playwright-core": "1.56.1",
+    "jszip": "3.10.1"
   }
 }
