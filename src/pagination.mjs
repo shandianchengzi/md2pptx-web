@@ -7,7 +7,7 @@ export const BODY_LEFT = 78;
 export const BODY_WIDTH = 1124;
 export const BOTTOM = 635;
 
-export const EXAMPLE = \`# AgentEmu 项目进度汇报
+export const EXAMPLE = `# AgentEmu 项目进度汇报
 
 ## 总体情况
 
@@ -29,7 +29,7 @@ Extractor 已经能够构建符号表并提取 EP-DSL 规则，Coder 可以确�
 
 ## Validator 与后续工作
 
-运行时已经可以使用 GDB 和 fuzzing 收集证据。下一步需要明确的输入—预期输出测试，随后完善错误归因、自动修复和回归执行。最终目标是形成可靠、可追溯、能持续改进的端到端流程。\`;
+运行时已经可以使用 GDB 和 fuzzing 收集证据。下一步需要明确的输入—预期输出测试，随后完善错误归因、自动修复和回归执行。最终目标是形成可靠、可追溯、能持续改进的端到端流程。`;
 
 export function stripInline(value) {
   return String(value)
@@ -41,7 +41,7 @@ export function stripInline(value) {
     .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
     .replace(/(?<!_)_([^_]+)_(?!_)/g, '$1')
     .replace(/~~([^~]+)~~/g, '$1')
-    .replace(/\`([^\`]+)\`/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
     .replace(/<\/?[^>]+>/g, '')
     .trim();
 }
@@ -85,7 +85,7 @@ export function parseMarkdown(markdown, overrideTitle = '') {
 
   lines.forEach((raw, index) => {
     const line = raw.trim();
-    if (/^(\`\`\`|~~~)/.test(line)) {
+    if (/^(```|~~~)/.test(line)) {
       flush();
       inCode = !inCode;
       return;
