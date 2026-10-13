@@ -181,14 +181,15 @@ function sanitizeFileName(filename) {
 
 async function exportPptx() {
   if (!deck.pages.length) return;
-  if (typeof window.PptxGenJS !== 'function') {
+  const PptxConstructor = window.PptxGenJS || window.pptxgen;
+  if (typeof PptxConstructor !== 'function') {
     message('PPTX 转换模块未加载。请刷新页面或检查网站构建结果。', true);
     return;
   }
   download.disabled = true;
   message('正在生成 PPTX，所有文字保持可编辑……');
   try {
-    const pptx = new window.PptxGenJS();
+    const pptx = new PptxConstructor();
     pptx.layout = 'LAYOUT_WIDE';
     pptx.author = 'MD2PPTX Web';
     pptx.subject = 'Editable slides generated from Markdown';
