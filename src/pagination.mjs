@@ -401,7 +401,7 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
   function makePage(title, continued = false) {
     const header = titleRows(title, continued);
     const page = {
-      title, continued, header, rows: [], table: null,
+      title, continued, header, rows: [], table: null, afterTable:false,
       layout: {...layout, titleDividerY: top + (header.length === 1 ? 77 : 122)},
       y: top + (header.length === 1 ? 111 : 148)
     };
@@ -414,8 +414,15 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
     let page = makePage(section.title);
     for (const block of section.blocks) {
       if (block.type === 'table') {
-        if (page.rows.length || page.table) page=makePage(section.title,true);
+        // Keep text above a table on the same slide whenever the table header
+        // and at least one body row will fit in the remaining space.
+        if (page.table) page=makePage(section.title,true);
         const plan=planMarkdownTable(block,layout,BODY_FONT,measure);
+        const minimumRowHeight=plan.preparedRows.length
+          ? Math.max(44, Math.min(2,...plan.preparedRows[0].map(c=>c.length))*plan.lineHeight+14)
+          : 0;
+        if(page.y+4+plan.headerHeight+minimumRowHeight+16>contentBottom &&
+           page.rows.length) page=makePage(section.title,true);
         const reserve=16;
         let currentTable=null;
         function startTablePage(newPage=false) {
@@ -449,10 +456,15 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
         }
         continue;
       }
-      if(page.table) page=makePage(section.title,true);
       if (block.type === 'break') {
-        if (page.rows.length) page = makePage(section.title, true);
+        if (page.rows.length || page.table) page = makePage(section.title,true);
         continue;
+      }
+      // Text after a short table may share the slide and remains part of the
+      // page's one editable text box (the table itself is a separate object).
+      if (page.table && !page.afterTable) {
+        if (page.y+GAP+LINE_HEIGHT>contentBottom) page=makePage(section.title,true);
+        else {page.y+=GAP;page.afterTable=true;}
       }
       const sub = block.type === 'subheading';
       const code = block.type === 'code';

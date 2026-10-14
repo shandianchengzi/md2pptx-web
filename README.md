@@ -13,7 +13,7 @@ A privacy-friendly static Markdown / plain-text to editable PowerPoint converter
 - Optionally display the document title at bottom left and slide numbers at bottom right. Both default to off; generated slides never include an MD2PPTX watermark.
 - Preserve Markdown `**bold**` and `__bold__` emphasis within editable PowerPoint text runs, even after auto-pagination.
 - Generate **one native editable text box per slide for non-table text**, including slide title, body, Markdown formatting, and optional footers. Markdown tables are separate **editable native PowerPoint table objects**, not text boxes or images. Decorative lines remain vector shapes.
-- Parse GitHub-flavored Markdown pipe tables, including header rows, alignment markers, empty cells, inline bold, and escaped `\|`. Automatically paginate tall tables and repeat headers on continuation slides.
+- Parse GitHub-flavored Markdown pipe tables, including header rows, alignment markers, empty cells, inline bold, and escaped `\|`. Place short tables alongside preceding and following text on the same slide when space permits. Automatically paginate tall tables and repeat headers on continuation slides.
 - GitHub Pages deployment through `.github/workflows/pages.yml`.
 
 ## Deploy

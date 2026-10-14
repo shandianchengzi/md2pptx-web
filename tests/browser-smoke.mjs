@@ -207,6 +207,41 @@ try {
   assert.ok(tableSlideCount>=2,'table should continue over multiple slides');
   assert.ok(slideTexts.some(xml=>xml.includes('After the table.')),'text after table must not disappear');
 
+
+  // Mixed text and native table must share the first slide where there is room.
+  const mixedSource='**当前规模：142 个固件数据集，85 个单元测试用例**\n\n' +
+    '| 固件类别 | 固件数 | 单元测试 | 模糊测试 | 其他固件 |\n' +
+    '|---|---:|---:|---:|---:|\n' +
+    '| 基础外设 | 46 | 66 | 0 | 0 |\n' +
+    '| 数据传输及复杂外设 | 13 | 15 | 0 | 2 |\n' +
+    '| 网络通信 | 34 | 2 | 15 | 18 |\n' +
+    '| 射频通信 | 24 | 2 | 5 | 17 |\n' +
+    '| 实际应用 | 25 | 0 | 15 | 10 |\n' +
+    '| **合计** | **142** | **85** | **35** | **47** |';
+  await page.locator('#bodyFontPt').fill('14');
+  await page.locator('#density').selectOption('compact');
+  await page.locator('#marginTop').fill('1.1');
+  await page.locator('#marginBottom').fill('0.9');
+  await page.locator('#marginLeft').fill('1.4');
+  await page.locator('#marginRight').fill('1.4');
+  await page.locator('#markdownInput').fill(mixedSource);
+  await page.waitForFunction(() =>
+    !!document.querySelector('.slide-native-table') &&
+    document.querySelector('.slide-canvas .kind-paragraph')?.textContent?.includes('142'));
+  assert.ok(await page.locator('.slide-native-table').isVisible());
+  assert.ok(await page.locator('.slide-canvas .kind-paragraph').count()>0);
+  const [mixedDownload]=await Promise.all([
+    page.waitForEvent('download',{timeout:35000}),
+    page.locator('#downloadButton').click()
+  ]);
+  const mixedPath=join(downloadDir,'mixed.pptx');
+  await mixedDownload.saveAs(mixedPath);
+  const mixedZip=await JSZip.loadAsync(await readFile(mixedPath));
+  const mixedXml=await mixedZip.file('ppt/slides/slide1.xml').async('string');
+  assert.match(mixedXml,/142 个固件数据集/,'first slide includes prose');
+  assert.match(mixedXml,/<a:tbl>/,'first slide includes a native editable table');
+  assert.equal((mixedXml.match(/<p:txBody>/g)||[]).length,1);
+
   assert.deepEqual(errors, [], 'browser console should have no runtime errors');
   console.log('Browser E2E passed: ' + customPageCount + ' pages with custom margins, bold and footer options at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');
 } finally {

@@ -165,15 +165,21 @@ test('multi-page Markdown table repeats headers and preserves every row in order
   assert.ok(bodyRows.some(r=>r.cells[2].runs.some(run=>run.bold&&run.text.includes('Pass'))));
 });
 
-test('table and surrounding paragraphs keep their order on separate slides', () => {
+test('short table shares a slide with preceding and following paragraphs', () => {
   const source = '## First\n\nBefore the table.\n\n'+
     '|A|B|\n|---|---|\n|one|two|\n\nAfter the table.';
   const deck=layoutMarkdown(source);
-  assert.ok(deck.pages.length>=3);
-  const idx=deck.pages.findIndex(p=>p.table);
-  assert.ok(idx>0);
-  assert.equal(deck.pages[idx].table.rows[1].cells[0].text,'one');
-  assert.ok(deck.pages.slice(idx+1).flatMap(p=>p.rows).some(r=>r.text==='After the table.'));
+  assert.equal(deck.pages.length,1,'compact content should not leave an almost empty slide');
+  const page=deck.pages[0];
+  assert.ok(page.table);
+  assert.equal(page.table.rows[1].cells[0].text,'one');
+  const before=page.rows.find(r=>r.text==='Before the table.');
+  const after=page.rows.find(r=>r.text==='After the table.');
+  assert.ok(before&&after);
+  assert.ok(before.y+before.height<=page.table.y);
+  const tableBottom=page.table.y+page.table.rows.reduce((n,r)=>n+r.height,0);
+  assert.ok(tableBottom<=after.y,'following text should begin below native table');
+  assert.ok(after.y+after.height<=page.layout.contentBottom,'must remain in page bounds');
 });
 
 test('very long table cells can continue across slides without dropping text', () => {
@@ -183,4 +189,35 @@ test('very long table cells can continue across slides without dropping text', (
   const cells=deck.pages.filter(p=>p.table).flatMap(p=>p.table.rows.filter(r=>!r.header).map(r=>r.cells[1].text));
   assert.ok(deck.pages.length>1);
   assert.equal(cells.join('').replace(/\s/g,''),lengthy.replace(/\s/g,''));
+});
+
+test('user screenshot: bold summary and six-row table stay on first slide',()=>{
+  const md=[
+    '**当前规模：142 个固件数据集，85 个单元测试用例**',
+    '',
+    '| 固件类别 | 固件数 | 单元测试用例 | 模糊测试固件 | 其他固件 |',
+    '|---|---:|---:|---:|---:|',
+    '| 基础外设 | 46 | 66 | 0 | 0 |',
+    '| 数据传输及复杂外设 | 13 | 15 | 0 | 2 |',
+    '| 网络通信 | 34 | 2 | 15 | 18 |',
+    '| 射频通信 | 24 | 2 | 5 | 17 |',
+    '| 实际应用 | 25 | 0 | 15 | 10 |',
+    '| **合计** | **142** | **85** | **35** | **47** |'
+  ].join('\n');
+  const result=layoutMarkdown(md,{
+    bodyFontPt:14,density:'compact',
+    marginsCm:{top:1.1,bottom:.9,left:1.4,right:1.4}
+  });
+  assert.ok(result.pages[0].table,'table should start on slide containing bold summary');
+  assert.ok(result.pages[0].rows.some(r=>r.text.includes('142 个固件数据集')));
+  assert.ok(result.pages[0].table.rows.length>2);
+});
+
+test('table begins on a new slide only if the remaining space is insufficient',()=>{
+  const prefix='## Analysis\n\n'+ '详细描述目前Collector与Validator的进展。'.repeat(75);
+  const result=layoutMarkdown(prefix+'\n\n|A|B|\n|---|---|\n|X|Y|',{bodyFontPt:25});
+  const index=result.pages.findIndex(p=>p.table);
+  assert.ok(index>0);
+  const p=result.pages[index];
+  assert.ok(p.table.y+p.table.rows.reduce((sum,r)=>sum+r.height,0)<=p.layout.contentBottom+1);
 });
