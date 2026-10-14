@@ -4,6 +4,7 @@ import {
   DENSITY_FONT_PRESETS, resolveBodyFontPt, DEFAULT_MARGINS_CM, resolveMarginsCm,
   MIN_MARGIN_CM, MAX_MARGIN_CM
 } from './pagination.mjs';
+import { buildSlideTextBox } from './slide-text.mjs';
 
 const $ = (id) => document.getElementById(id);
 const editor = $('markdownInput');
@@ -272,29 +273,6 @@ function gotoSlide(nextIndex) {
   paintThumbnails();
 }
 
-function addTextRow(slide, row) {
-  const textContent = row.runs?.some(run => run.bold)
-    ? row.runs.map(run => ({text:run.text, options:{bold: Boolean(run.bold)}}))
-    : row.text;
-  slide.addText(textContent, {
-    x: row.x * UNIT,
-    y: row.y * UNIT,
-    w: row.width * UNIT,
-    h: Math.max(row.height, row.size * 1.3) * UNIT,
-    margin: 0,
-    fontFace: row.kind === 'code' ? 'Consolas' : 'Microsoft YaHei',
-    fontSize: row.size * .75,
-    bold: Boolean(row.bold),
-    color: row.kind === 'title' ? '19354A' :
-      row.kind === 'subheading' ? '205C79' :
-      row.kind === 'quote' ? '587487' :
-      row.kind === 'code' ? '355B72' : '233E52',
-    valign: 'mid',
-    breakLine: false,
-    transparency: 0
-  });
-}
-
 function sanitizeFileName(filename) {
   let clean = filename.replace(/[\\/:*?"<>|]+/g, '_').replace(/^\.+/, '').trim();
   if (clean.length > 72) clean = Array.from(clean).slice(0,72).join('');
@@ -329,30 +307,14 @@ async function exportPptx() {
         w: page.layout.width*UNIT, h: 0,
         line: { color: 'E0E9EE', width: 1.1 }
       });
-      [...page.header, ...page.rows].forEach(row => addTextRow(slide,row));
+      const combined = buildSlideTextBox(page, deck.title, index, deck.pages.length, UNIT);
+      slide.addText(combined.text, combined.box);
       if (page.layout.showFooterTitle || page.layout.showPageNumber) {
         slide.addShape(pptx.ShapeType.line, {
           x: page.layout.left*UNIT, y: page.layout.footerLineY*UNIT,
           w: page.layout.width*UNIT, h: 0,
           line: { color: 'E7EDF1', width: .7 }
         });
-        const footerY = page.layout.footerTextY * UNIT;
-        if (page.layout.showFooterTitle) {
-          slide.addText(deck.title, {
-            x: page.layout.left*UNIT, y: footerY,
-            w: Math.max(100, page.layout.width-140)*UNIT, h: 24*UNIT,
-            fontFace: 'Microsoft YaHei', fontSize: 10, color: '8DA2AF',
-            margin: 0, valign: 'mid'
-          });
-        }
-        if (page.layout.showPageNumber) {
-          slide.addText(String(index+1) + ' / ' + deck.pages.length, {
-            x: (page.layout.left+page.layout.width-110)*UNIT, y: footerY,
-            w: 110*UNIT, h: 24*UNIT,
-            fontFace: 'Arial', fontSize: 10, color: '8DA2AF', margin: 0,
-            align: 'right', valign: 'mid'
-          });
-        }
       }
     });
     await pptx.writeFile({ fileName: sanitizeFileName(deck.title) + '.pptx' });

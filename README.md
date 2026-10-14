@@ -12,6 +12,7 @@ A privacy-friendly static Markdown / plain-text to editable PowerPoint converter
 - Adjust all four page margins independently (top / bottom / left / right, 0.5–5.0 cm). Preview and PPTX export use identical page geometry.
 - Optionally display the document title at bottom left and slide numbers at bottom right. Both default to off; generated slides never include an MD2PPTX watermark.
 - Preserve Markdown `**bold**` and `__bold__` emphasis within editable PowerPoint text runs, even after auto-pagination.
+- Generate **one native editable text box per slide**, including slide title, body, Markdown formatting, and optional footers. Decorative lines remain independent vector shapes.
 - GitHub Pages deployment through `.github/workflows/pages.yml`.
 
 ## Deploy

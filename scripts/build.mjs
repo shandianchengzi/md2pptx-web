@@ -8,6 +8,7 @@ await cp('index.html', join(dist, 'index.html'));
 await cp('favicon.svg', join(dist, 'favicon.svg'));
 await cp('src/app.js', join(dist, 'src/app.js'));
 await cp('src/pagination.mjs', join(dist, 'src/pagination.mjs'));
+await cp('src/slide-text.mjs', join(dist, 'src/slide-text.mjs'));
 await cp('src/style.css', join(dist, 'src/style.css'));
 await cp('node_modules/pptxgenjs/dist/pptxgen.bundle.js', join(dist,'vendor/pptxgen.bundle.js'));
 const fileSize = (await stat(join(dist,'vendor/pptxgen.bundle.js'))).size;

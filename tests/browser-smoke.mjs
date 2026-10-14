@@ -9,7 +9,7 @@ import JSZip from 'jszip';
 const prefix = '/md2pptx-web/';
 const allowed = new Set([
   'index.html', 'favicon.svg', 'src/app.js', 'src/pagination.mjs',
-  'src/style.css', 'vendor/pptxgen.bundle.js'
+  'src/style.css', 'src/slide-text.mjs', 'vendor/pptxgen.bundle.js'
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -133,6 +133,11 @@ try {
   assert.equal(slideFiles.length, customPageCount, 'preview and PPTX must have the same slide count');
   const xml = await zip.file(slideFiles[0]).async('string');
   assert.match(xml, /Collector/, 'PPTX should contain editable slide text');
+  for (const slidePath of slideFiles) {
+    const currentXml = await zip.file(slidePath).async('string');
+    assert.equal((currentXml.match(/<p:txBody>/g)||[]).length, 1,
+      slidePath + ': exactly one editable text box expected');
+  }
   assert.match(xml, /sz="3000"/, 'exported slide must use the selected 30pt body font');
   assert.match(xml, /b="1"/, 'exported rich-text runs must preserve Markdown bold');
   assert.doesNotMatch(xml, /MD2PPTX/, 'slide content must not contain product watermark');
@@ -149,6 +154,8 @@ try {
   const footerZip = await JSZip.loadAsync(await readFile(footerOutput));
   const footerXml = await footerZip.file('ppt/slides/slide1.xml').async('string');
   assert.match(footerXml, /Markdown Presentation/, 'enabled footer should show document title only');
+  assert.equal((footerXml.match(/<p:txBody>/g)||[]).length, 1,
+    'enabled footer must share the only text box');
   assert.match(footerXml, /1 \/ /, 'enabled page numbers should show the page index');
   assert.doesNotMatch(footerXml, /MD2PPTX/, 'enabled footer also must not include product watermark');
   await page.reload({waitUntil:'load'});
