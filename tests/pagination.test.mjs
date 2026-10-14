@@ -230,7 +230,7 @@ test('inline math uses a placeholder with retained equation metadata',()=>{
   const deck=layoutMarkdown(source);
   const rich=deck.pages.flatMap(p=>p.rows).flatMap(r=>r.runs||[]);
   assert.ok(rich.some(r=>r.mathTex==='E=mc^2'));
-  assert.ok(rich.some(r=>r.mathTex.includes('alpha')));
+  assert.ok(rich.some(r=>r.mathTex?.includes('alpha')));
 });
 test('display math inserts a separate centered formula block',()=>{
   const doc=parseMarkdown('## Formula\n\n$$\\frac{a}{b}$$\n\n\\[\\alpha+\\beta\\]');
