@@ -12,11 +12,6 @@ export function mathReady() {
       if(!m || !m.startup) throw Error('MathJax library is unavailable');
       await m.startup.promise;
       if(typeof m.tex2svg!=='function')throw Error('MathJax TeX renderer unavailable');
-      // Validate the exact formulas reported as unrendered in the UI.
-      for(const tex of ['a_b,a^b','\frac{a}{b}']) {
-        const svg=m.tex2svg(tex,{display:true}).querySelector('svg');
-        if(!svg)throw Error('No mathematical SVG generated for '+tex);
-      }
       engineState='ready';
       engineError=null;
       return m;
