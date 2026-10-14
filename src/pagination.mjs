@@ -21,6 +21,31 @@ export function resolveMarginsCm(value = {}) {
   }
   return output;
 }
+export const MATH_PLACEHOLDER='\uE000';
+
+function tokenizeInlineMath(runs) {
+  const output=[];
+  const regex=/(?<!\\)\$\$([^$\n]+?)\$\$|(?<!\\)\$([^$\n]+?)\$|\\\((.+?)\\\)/g;
+  for(const run of runs) {
+    regex.lastIndex=0;
+    let at=0,m;
+    while ((m=regex.exec(run.text))) {
+      if(m.index>at) output.push({...run,text:run.text.slice(at,m.index)});
+      const tex=(m[1]??m[2]??m[3]).trim();
+      if(tex) {
+        const visualLength=tex.replace(/\\[a-zA-Z]+/g,'X')
+          .replace(/[\{\}_^]/g,'').length;
+        const slots=Math.max(2,Math.min(12,
+          Math.ceil(visualLength*.85)+(tex.includes('\\frac')?1:0)));
+        output.push({text:MATH_PLACEHOLDER.repeat(slots),bold:Boolean(run.bold),mathTex:tex});
+      } else output.push({...run,text:m[0]});
+      at=regex.lastIndex;
+    }
+    if(at<run.text.length) output.push({...run,text:run.text.slice(at)});
+  }
+  return output.filter(x=>x.text.length>0);
+}
+
 export function sliceStyledRuns(runs, from, to) {
   const result = [];
   let cursor = 0;
@@ -29,7 +54,8 @@ export function sliceStyledRuns(runs, from, to) {
     const beginLocal = Math.max(from, cursor);
     const endLocal = Math.min(to, end);
     if (endLocal > beginLocal) result.push({
-      text: part.text.slice(beginLocal - cursor, endLocal - cursor), bold: Boolean(part.bold)
+      text: part.text.slice(beginLocal - cursor, endLocal - cursor), bold: Boolean(part.bold),
+      ...(part.mathTex ? {mathTex:part.mathTex} : {})
     });
     cursor = end;
   }
@@ -59,7 +85,7 @@ export function parseBoldRuns(raw) {
   if(i<cleaned.length) pieces.push({text:cleanPlain(cleaned.slice(i)),bold:false});
   const all=pieces.map(x=>x.text).join('');
   const trimStart=all.length-all.trimStart().length;
-  return sliceStyledRuns(pieces,trimStart,trimStart+all.trim().length);
+  return tokenizeInlineMath(sliceStyledRuns(pieces,trimStart,trimStart+all.trim().length));
 }
 
 
@@ -268,6 +294,33 @@ export function parseMarkdown(markdown, overrideTitle = '') {
       continue;
     }
     if (!line) { flush(); continue; }
+    // Display math: $latex$, multiline $...$ or \[...\].
+    if(line.startsWith('$') || line.startsWith('\\[')) {
+      const marker=line.startsWith('$')?'$':'\\[';
+      const closing=marker==='$'?'$':'\\]';
+      const remaining=line.slice(marker.length);
+      let latex='',closed=false;
+      const found=remaining.indexOf(closing);
+      if(found>=0) {latex=remaining.slice(0,found);closed=true;}
+      else {
+        latex=remaining;
+        for(let next=index+1;next<lines.length;next++){
+          const fragment=lines[next];
+          const closeAt=fragment.indexOf(closing);
+          if(closeAt>=0){
+            latex+='\n'+fragment.slice(0,closeAt);
+            index=next;closed=true;break;
+          }
+          latex+='\n'+fragment;
+          index=next;
+        }
+      }
+      if(closed) {
+        flush();
+        current.blocks.push({type:'math-block',tex:latex.trim()});
+        continue;
+      }
+    }
     const table = readMarkdownTable(lines,index);
     if (table) {
       flush();
@@ -312,8 +365,11 @@ const wordSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === '
   : null;
 
 function wordPieces(text) {
-  if (wordSegmenter) return Array.from(wordSegmenter.segment(text), x => x.segment);
-  return text.match(/[A-Za-z0-9_-]+|[\u4e00-\u9fff]|\s+|./gu) || [];
+  // Don't split a LaTeX placeholder into individual characters while wrapping.
+  return String(text).split(/(\uE000+)/g).flatMap(piece=>
+    piece.startsWith(MATH_PLACEHOLDER) ? [piece] :
+    wordSegmenter ? Array.from(wordSegmenter.segment(piece), x => x.segment) :
+      (piece.match(/[A-Za-z0-9_-]+|[\u4e00-\u9fff]|\s+|./gu) || []));
 }
 
 export function wrapText(text, width, fontSize, measure = defaultMeasure) {
@@ -401,7 +457,7 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
   function makePage(title, continued = false) {
     const header = titleRows(title, continued);
     const page = {
-      title, continued, header, rows: [], table: null, afterTable:false,
+      title, continued, header, rows: [], formulas:[], table: null, afterTable:false,
       layout: {...layout, titleDividerY: top + (header.length === 1 ? 77 : 122)},
       y: top + (header.length === 1 ? 111 : 148)
     };
@@ -413,6 +469,16 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
     if (!section.blocks.length) continue;
     let page = makePage(section.title);
     for (const block of section.blocks) {
+      if (block.type === 'math-block') {
+        const large=/\\(?:frac|dfrac|sum|int|lim|begin)\b/.test(block.tex);
+        const height=large?102:73;
+        const topPadding=12;
+        if(page.y+topPadding+height>contentBottom)page=makePage(section.title,true);
+        page.formulas.push({tex:block.tex,display:true,
+          x:left,y:page.y+topPadding,width,height});
+        page.y+=height+topPadding+GAP;
+        continue;
+      }
       if (block.type === 'table') {
         // Keep text above a table on the same slide whenever the table header
         // and at least one body row will fit in the remaining space.
