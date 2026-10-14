@@ -254,7 +254,7 @@ export function parseMarkdown(markdown, overrideTitle = '') {
     }
     const h = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (h) {
-      if (treatFirstAsDocumentTitle && first.index === index) return;
+      if (treatFirstAsDocumentTitle && first.index === index) continue;
       if (h[1].length <= 2) nextSection(stripInline(h[2]));
       else {
         flush();
