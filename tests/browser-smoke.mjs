@@ -45,7 +45,7 @@ async function verifyCanOpenInOffice(pptxPath,label) {
 
 const allowed = new Set([
   'index.html', 'favicon.svg', 'src/app.js', 'src/pagination.mjs',
-  'src/style.css', 'src/slide-text.mjs', 'src/office-compat.mjs', 'vendor/jszip.min.js', 'vendor/pptxgen.bundle.js'
+  'src/style.css', 'src/slide-text.mjs', 'src/office-compat.mjs', 'src/math-render.mjs', 'vendor/tex-svg-full.js', 'vendor/jszip.min.js', 'vendor/pptxgen.bundle.js'
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -283,6 +283,39 @@ try {
   assert.match(mixedXml,/142 个固件数据集/,'first slide includes prose');
   assert.match(mixedXml,/<a:tbl>/,'first slide includes a native editable table');
   assert.equal((mixedXml.match(/<p:txBody>/g)||[]).length,1);
+
+
+  // Verify real offline rendering of inline and display LaTeX formulas.
+  // No raw $ delimiters or TeX commands should appear as slide prose.
+  const mathDoc=[
+    '## Mathematics',
+    '',
+    'Mass-energy relation: $E=mc^2$ and inline \\\\(\\\\alpha+\\\\beta\\\\).',
+    '',
+    '$\\\\frac{a}{b}=\\\\sum_{i=1}^{n}i$',
+    '',
+    '\\\\[\\\\int_0^1 x^2 dx=\\\\frac13\\\\]'
+  ].join('\n').replace(/\\\\/g,'\\');
+  await page.locator('#markdownInput').fill(mathDoc);
+  await page.waitForFunction(() =>
+    document.querySelectorAll('.rendered-math svg').length >= 3,
+    null,{timeout:25000});
+  assert.ok(await page.locator('.rendered-math svg').count()>=3,
+    'inline and block math must render to SVG in live preview');
+  const [mathDownload]=await Promise.all([
+    page.waitForEvent('download',{timeout:35000}),
+    page.locator('#downloadButton').click()
+  ]);
+  const mathPath=join(downloadDir,'equations.pptx');
+  await mathDownload.saveAs(mathPath);
+  await verifyCanOpenInOffice(mathPath,'inline and block MathJax equations');
+  const mathZip=await JSZip.loadAsync(await readFile(mathPath));
+  await validateSlideStructuralIntegrity(mathZip);
+  const imageNames=Object.keys(mathZip.files).filter(x=>/^ppt\/media\/image.*\.png$/i.test(x));
+  assert.ok(imageNames.length>=3,'math must export as compatible PNG formula images');
+  const mathXml=await mathZip.file('ppt/slides/slide1.xml').async('string');
+  assert.doesNotMatch(mathXml,/\$\$|\\frac/, 'raw LaTeX should not be printed in slides');
+  assert.ok((mathXml.match(/<p:pic>/g)||[]).length>=3,'each math image should be an editable placement');
 
   assert.deepEqual(errors, [], 'browser console should have no runtime errors');
   console.log('Browser E2E passed: ' + customPageCount + ' pages with custom margins, bold and footer options at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');

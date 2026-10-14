@@ -221,3 +221,22 @@ test('table begins on a new slide only if the remaining space is insufficient',(
   const p=result.pages[index];
   assert.ok(p.table.y+p.table.rows.reduce((sum,r)=>sum+r.height,0)<=p.layout.contentBottom+1);
 });
+
+test('inline math uses a placeholder with retained equation metadata',()=>{
+  const source='## Maths\n\nEnergy $E=mc^2$; also \\(\\alpha+\\beta\\).';
+  const doc=parseMarkdown(source);
+  const block=doc.sections[0].blocks.find(x=>x.type==='paragraph');
+  assert.equal((block.runs||[]).filter(run=>run.mathTex).length,2);
+  const deck=layoutMarkdown(source);
+  const rich=deck.pages.flatMap(p=>p.rows).flatMap(r=>r.runs||[]);
+  assert.ok(rich.some(r=>r.mathTex==='E=mc^2'));
+  assert.ok(rich.some(r=>r.mathTex.includes('alpha')));
+});
+test('display math inserts a separate centered formula block',()=>{
+  const doc=parseMarkdown('## Formula\n\n$$\\frac{a}{b}$$\n\n\\[\\alpha+\\beta\\]');
+  assert.equal(doc.sections[0].blocks.filter(b=>b.type==='math-block').length,2);
+  const slides=layoutMarkdown('## Formula\n\n$$\\frac{a}{b}$$\n\n\\[\\alpha+\\beta\\]');
+  const f=slides.pages.flatMap(x=>x.formulas||[]);
+  assert.equal(f.length,2);
+  assert.ok(f.every(x=>x.display&&x.height>0&&x.y>=0));
+});
