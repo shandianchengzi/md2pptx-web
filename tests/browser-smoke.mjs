@@ -320,12 +320,13 @@ try {
 
   // Exact screenshot regression: multiline display math followed immediately
   // by a table. Both formulas must be SVGs, never raw TeX text/placeholders.
+  const pair=String.fromCharCode(36).repeat(2);
   const screenshotDoc=[
     '**当前规模：142 个固件数据集，85 个单元测试用例**',
-    '$',
+    pair,
     'a_b,a^b',
-    '$',
-    '$\\frac{a}{b}$',
+    pair,
+    pair+'\\frac{a}{b}'+pair,
     '| 固件类别 | 固件数 | 单元测试用例 | 模糊测试固件 | 其他固件 |',
     '|---|---:|---:|---:|---:|',
     '| 基础外设 | 46 | 66 | 0 | 0 |',
@@ -335,7 +336,8 @@ try {
     '| 实际应用 | 25 | 0 | 15 | 10 |',
     '| **合计** | **142** | **85** | **35** | **47** |'
   ].join('\n');
-  await page.locator('#bodyFontPt').fill('14');
+  assert.ok(screenshotDoc.includes(pair+'\\frac{a}{b}'+pair));
+    await page.locator('#bodyFontPt').fill('14');
   await page.locator('#density').selectOption('compact');
   await page.locator('#marginTop').fill('1.1');
   await page.locator('#marginBottom').fill('0.9');
