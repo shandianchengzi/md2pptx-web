@@ -161,6 +161,52 @@ try {
   await page.reload({waitUntil:'load'});
   assert.equal(await page.locator('#showFooterTitle').isChecked(),true);
   assert.equal(await page.locator('#showPageNumber').isChecked(),true);
+
+  // Native Markdown tables must be previewed as tables, not prose, and
+  // must export as editable a:tbl structures (not images or flat text).
+  await page.locator('#showFooterTitle').uncheck();
+  await page.locator('#showPageNumber').uncheck();
+  const tableDoc='## Table verification\n\n' +
+    '| Peripheral | Condition | Result |\n' +
+    '| :--- | :---: | ---: |\n' +
+    Array.from({length:34},(_,i)=>
+      '| UART'+i+' | Check **IRQ** and DMA states repeatedly | '+i+' |').join('\n') +
+    '\n\nAfter the table.';
+  await page.locator('#markdownInput').fill(tableDoc);
+  await page.waitForFunction(() => document.querySelector('.slide-native-table'));
+  const tablePreview=await page.locator('.slide-native-table').count();
+  assert.ok(tablePreview===1,'active slide must show one visible table');
+  assert.equal(await page.locator('.slide-table-head .slide-table-cell').count(),3);
+  assert.ok(await page.locator('.slide-table-row').count()>=2);
+  const tablePageCount=Number(await page.locator('#pageCount').textContent());
+  assert.ok(tablePageCount>=3,'table and following paragraph should span pages');
+  const [tableDownload]=await Promise.all([
+    page.waitForEvent('download',{timeout:35000}),
+    page.locator('#downloadButton').click()
+  ]);
+  const tableOutput=join(downloadDir,'table.pptx');
+  await tableDownload.saveAs(tableOutput);
+  const tableZip=await JSZip.loadAsync(await readFile(tableOutput));
+  const tableSlides=Object.keys(tableZip.files).filter(path=>/^ppt\/slides\/slide\d+\.xml$/.test(path));
+  assert.equal(tableSlides.length,tablePageCount);
+  let tableSlideCount=0;
+  const slideTexts=[];
+  for(const path of tableSlides) {
+    const slideXml=await tableZip.file(path).async('string');
+    slideTexts.push(slideXml);
+    if(slideXml.includes('<a:tbl>')) {
+      tableSlideCount++;
+      assert.equal((slideXml.match(/<a:tbl>/g)||[]).length,1,'one native table per table slide');
+      assert.equal((slideXml.match(/<p:txBody>/g)||[]).length,1,
+        'one heading/text frame per slide; native table is a separate editable object');
+      assert.match(slideXml,/Peripheral/,'table header must repeat across continuation slides');
+      assert.match(slideXml,/IRQ/,'table cells must retain data');
+      assert.match(slideXml,/b="1"/,'cell emphasis must remain editable bold text');
+    }
+  }
+  assert.ok(tableSlideCount>=2,'table should continue over multiple slides');
+  assert.ok(slideTexts.some(xml=>xml.includes('After the table.')),'text after table must not disappear');
+
   assert.deepEqual(errors, [], 'browser console should have no runtime errors');
   console.log('Browser E2E passed: ' + customPageCount + ' pages with custom margins, bold and footer options at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');
 } finally {

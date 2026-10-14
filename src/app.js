@@ -192,6 +192,35 @@ function paintSlide() {
     if (page.layout.showPageNumber) footer.appendChild(element('span','',String(activeSlide+1)+' / '+deck.pages.length));
     preview.appendChild(footer);
   }
+  if (page.table) {
+    const tab=page.table;
+    const tableEl=element('div','slide-native-table');
+    tableEl.style.left=tab.x+'px';
+    tableEl.style.top=tab.y+'px';
+    tableEl.style.width=tab.width+'px';
+    tableEl.style.fontSize=tab.fontSize+'px';
+    const template=tab.columns.map(w=>w+'px').join(' ');
+    for(const row of tab.rows) {
+      const gridRow=element('div','slide-table-row'+(row.header?' slide-table-head':''));
+      gridRow.style.display='grid';
+      gridRow.style.gridTemplateColumns=template;
+      gridRow.style.height=row.height+'px';
+      for(const cell of row.cells) {
+        const cellEl=element('div','slide-table-cell');
+        cellEl.style.textAlign=cell.align;
+        if(cell.runs?.length) {
+          for(const run of cell.runs) {
+            const span=element('span','',run.text);
+            if(run.bold) span.style.fontWeight='750';
+            cellEl.appendChild(span);
+          }
+        } else cellEl.textContent=cell.text;
+        gridRow.appendChild(cellEl);
+      }
+      tableEl.appendChild(gridRow);
+    }
+    preview.appendChild(tableEl);
+  }
   resizeSlide();
 }
 
@@ -205,7 +234,7 @@ function paintThumbnails() {
     button.setAttribute('aria-label', '第 ' + (index+1) + ' 页：' + page.title);
     const inner = element('div', 'thumb-inner');
     inner.appendChild(element('div', 'thumb-title', page.title + (page.continued ? '（续）' : '')));
-    inner.appendChild(element('div', 'thumb-copy', page.rows.slice(0,4).map(x => x.text).join(' ')));
+    inner.appendChild(element('div', 'thumb-copy', page.table ? page.table.rows.slice(0,2).flatMap(r=>r.cells.map(c=>c.text)).join(' · ') : page.rows.slice(0,4).map(x => x.text).join(' ')));
     button.appendChild(inner);
     button.appendChild(element('div', 'thumb-count', String(index + 1).padStart(2, '0')));
     button.addEventListener('click', () => {
@@ -309,6 +338,34 @@ async function exportPptx() {
       });
       const combined = buildSlideTextBox(page, deck.title, index, deck.pages.length, UNIT);
       slide.addText(combined.text, combined.box);
+      if(page.table) {
+        const t=page.table;
+        const tabRows=t.rows.map(row=>row.cells.map(cell=>({
+          text:cell.runs?.some(run=>run.bold)
+            ? cell.runs.map(run=>({text:run.text,options:{bold:Boolean(run.bold)}}))
+            : cell.text,
+          options:{
+            align:cell.align,
+            bold:Boolean(row.header),
+            color:row.header?'19354A':'233E52',
+            fill:{color:row.header?'EAF2F6':'FFFFFF'}
+          }
+        })));
+        slide.addTable(tabRows,{
+          x:t.x*UNIT, y:t.y*UNIT,
+          w:t.width*UNIT,
+          colW:t.columns.map(w=>w*UNIT),
+          rowH:t.rows.map(row=>row.height*UNIT),
+          autoPage:false,
+          border:{type:'solid',pt:.7,color:'D7E3EB'},
+          fontFace:'Microsoft YaHei',
+          fontSize:t.fontSize*.75,
+          color:'233E52',
+          margin:0.06,
+          valign:'mid',
+          breakLine:false
+        });
+      }
       if (page.layout.showFooterTitle || page.layout.showPageNumber) {
         slide.addShape(pptx.ShapeType.line, {
           x: page.layout.left*UNIT, y: page.layout.footerLineY*UNIT,

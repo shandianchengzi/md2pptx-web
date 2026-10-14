@@ -12,7 +12,8 @@ A privacy-friendly static Markdown / plain-text to editable PowerPoint converter
 - Adjust all four page margins independently (top / bottom / left / right, 0.5–5.0 cm). Preview and PPTX export use identical page geometry.
 - Optionally display the document title at bottom left and slide numbers at bottom right. Both default to off; generated slides never include an MD2PPTX watermark.
 - Preserve Markdown `**bold**` and `__bold__` emphasis within editable PowerPoint text runs, even after auto-pagination.
-- Generate **one native editable text box per slide**, including slide title, body, Markdown formatting, and optional footers. Decorative lines remain independent vector shapes.
+- Generate **one native editable text box per slide for non-table text**, including slide title, body, Markdown formatting, and optional footers. Markdown tables are separate **editable native PowerPoint table objects**, not text boxes or images. Decorative lines remain vector shapes.
+- Parse GitHub-flavored Markdown pipe tables, including header rows, alignment markers, empty cells, inline bold, and escaped `\|`. Automatically paginate tall tables and repeat headers on continuation slides.
 - GitHub Pages deployment through `.github/workflows/pages.yml`.
 
 ## Deploy
@@ -32,6 +33,6 @@ Open `http://localhost:8080`. Node 20+ recommended.
 
 ## Technical notes
 
-`src/pagination.mjs` contains a shared deterministic slide layout model used by both preview and PPTX export. The browser's font measurements drive line breaking, so rendered layout may differ slightly on devices with different fonts. Basic Markdown (headings, paragraphs, bold/italic markers, lists, quotes, fenced code) is supported; complex tables/images are represented as text, not faithfully re-created as PPT graphics. Unlike AI summarizers, this tool does not shorten your document.
+`src/pagination.mjs` contains a shared deterministic slide layout model used by both preview and PPTX export. The browser's font measurements drive line breaking, so rendered layout may differ slightly on devices with different fonts. Markdown headings, paragraphs, bold emphasis, lists, quotes, fenced code, and pipe tables are supported. Tables become native PowerPoint tables and can continue across slides, with repeated header rows. Merged cells, nested tables, and complex HTML table layouts are not supported; image references still become text. Unlike AI summarizers, this tool does not shorten your document.
 
 The build bundles a pinned PptxGenJS distribution into the Pages artifact. The published site has no runtime CDN dependency. User documents remain in browser memory only and are not stored or sent to GitHub.

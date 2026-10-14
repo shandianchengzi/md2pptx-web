@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutMarkdown, parseMarkdown, wrapText, resolveBodyFontPt, resolveMarginsCm, parseBoldRuns, PX_PER_CM } from '../src/pagination.mjs';
+import { layoutMarkdown, parseMarkdown, wrapText, resolveBodyFontPt, resolveMarginsCm, parseBoldRuns, PX_PER_CM, readMarkdownTable, splitTableCells } from '../src/pagination.mjs';
 
 test('headings produce logical sections without losing content', () => {
   const doc = parseMarkdown('# Report\n\n## Collector\n\n测试内容。\n\n## Validator\n\nNext part.');
@@ -108,4 +108,79 @@ test('footer title and page numbers are optional and off by default', () => {
   assert.equal(b.layout.showFooterTitle,true);
   assert.equal(b.layout.showPageNumber,true);
   assert.ok(b.layout.contentBottom<a.layout.contentBottom);
+});
+
+
+test('recognizes Markdown tables with alignment, escaped pipes, empty cells, and inline bold', () => {
+  const source = [
+    '## Status',
+    '',
+    '| Peripheral | Test state | Notes |',
+    '|:---|:---:|---:|',
+    '| **UART** | Pass | IRQ \\\| DMA |',
+    '| GPIO | | Pending |'
+  ].join('\n');
+  const parsed = parseMarkdown(source);
+  const table = parsed.sections[0].blocks.find(b => b.type === 'table');
+  assert.ok(table, 'pipe table should remain structural data, not flattened text');
+  assert.equal(table.headers.length, 3);
+  assert.deepEqual(table.aligns, ['left','center','right']);
+  assert.equal(table.rows.length, 2);
+  assert.equal(table.rows[0][0].text, 'UART');
+  assert.equal(table.rows[0][2].text, 'IRQ | DMA');
+  assert.ok(table.rows[0][0].runs.some(r => r.bold && r.text === 'UART'));
+  assert.equal(table.rows[1][1].text, '');
+  assert.deepEqual(splitTableCells('| first | second |'), ['first','second']);
+});
+
+test('ordinary pipe-containing prose is not mistaken for a table', () => {
+  const parsed = parseMarkdown('## Demo\n\nThis is A | B without a separator.\n\nNext paragraph.');
+  assert.equal(parsed.sections[0].blocks.filter(b=>b.type==='table').length,0);
+});
+
+test('multi-page Markdown table repeats headers and preserves every row in order', () => {
+  const source = '## Collector\n\n' +
+    '| Peripheral | Action | Verification |\n' +
+    '| --- | :---: | ---: |\n' +
+    Array.from({length:32},(_,i)=> '| UART'+i+' | '+
+      '写寄存器并检查中断状态。'.repeat(5)+' | '+'**Pass**'+' |').join('\n');
+  const deck = layoutMarkdown(source,{bodyFontPt:24,marginsCm:{top:3,bottom:3,left:3,right:3}});
+  const tablePages=deck.pages.filter(p=>p.table);
+  assert.ok(tablePages.length>=2,'a large table must span multiple slides');
+  assert.equal(tablePages.length,deck.pages.length);
+  const bodyRows=tablePages.flatMap(p=>p.table.rows.filter(r=>!r.header));
+  // Every logical row in this fixture fits a page without splitting.
+  assert.equal(bodyRows.length,32);
+  assert.deepEqual(bodyRows.map(r=>r.cells[0].text),
+    Array.from({length:32},(_,i)=>'UART'+i));
+  for (const page of tablePages) {
+    const t=page.table;
+    assert.equal(t.rows[0].header,true,'header repeats on each continuation page');
+    assert.equal(t.rows[0].cells[0].text,'Peripheral');
+    const total=t.rows.reduce((sum,r)=>sum+r.height,0);
+    assert.ok(t.y+total<=page.layout.contentBottom+1,
+      'table must remain inside page content bounds');
+    assert.ok(Math.abs(t.columns.reduce((a,b)=>a+b,0)-page.layout.width)<1e-6);
+  }
+  assert.ok(bodyRows.some(r=>r.cells[2].runs.some(run=>run.bold&&run.text.includes('Pass'))));
+});
+
+test('table and surrounding paragraphs keep their order on separate slides', () => {
+  const source = '## First\n\nBefore the table.\n\n'+
+    '|A|B|\n|---|---|\n|one|two|\n\nAfter the table.';
+  const deck=layoutMarkdown(source);
+  assert.ok(deck.pages.length>=3);
+  const idx=deck.pages.findIndex(p=>p.table);
+  assert.ok(idx>0);
+  assert.equal(deck.pages[idx].table.rows[1].cells[0].text,'one');
+  assert.ok(deck.pages.slice(idx+1).flatMap(p=>p.rows).some(r=>r.text==='After the table.'));
+});
+
+test('very long table cells can continue across slides without dropping text', () => {
+  const lengthy='功能描述很长，需要测试跨页分割。'.repeat(65);
+  const deck=layoutMarkdown('## Long\n\n|Name|Description|\n|---|---|\n|UART|'+lengthy+'|',
+    {bodyFontPt:25,marginsCm:{top:2,bottom:2,left:2,right:2}});
+  const cells=deck.pages.filter(p=>p.table).flatMap(p=>p.table.rows.filter(r=>!r.header).map(r=>r.cells[1].text));
+  assert.ok(deck.pages.length>1);
+  assert.equal(cells.join('').replace(/\s/g,''),lengthy.replace(/\s/g,''));
 });

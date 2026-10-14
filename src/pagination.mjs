@@ -116,6 +116,101 @@ function normalizeParagraph(lines) {
   }, '');
 }
 
+
+// GitHub-flavored Markdown pipe table detection, including escaped pipes.
+export function splitTableCells(raw) {
+  let line = String(raw).trim();
+  if (line.startsWith('|')) line = line.slice(1);
+  if (line.endsWith('|') && !line.endsWith('\\|')) line = line.slice(0,-1);
+  const cells = [];
+  let value = '', code = false;
+  for (let i=0;i<line.length;i++) {
+    const c = line[i];
+    if (c==='\\' && line[i+1]==='|') { value+='|'; i++; continue; }
+    if (c===String.fromCharCode(96)) code=!code;
+    if (c==='|' && !code) { cells.push(value.trim()); value=''; }
+    else value+=c;
+  }
+  cells.push(value.trim());
+  return cells;
+}
+
+export function readMarkdownTable(lines, startIndex) {
+  if (startIndex+1 >= lines.length || !lines[startIndex].includes('|')) return null;
+  const header=splitTableCells(lines[startIndex]);
+  const divider=splitTableCells(lines[startIndex+1]);
+  if(header.length<2 || divider.length!==header.length ||
+    !divider.every(c=>/^:?-{3,}:?$/.test(c))) return null;
+  const aligns=divider.map(c=>c.startsWith(':')&&c.endsWith(':')?'center':
+    c.endsWith(':')?'right':'left');
+  const cell=(raw)=>{const runs=parseBoldRuns(raw);return {text:runs.map(x=>x.text).join(''),runs};};
+  const headers=header.map(cell);
+  const rows=[];
+  let i=startIndex+2;
+  while (i<lines.length && lines[i].trim() && lines[i].includes('|')) {
+    const pieces=splitTableCells(lines[i]);
+    // A new heading/divider ends this table.
+    if (/^\s*#{1,6}\s/.test(lines[i]) || pieces.every(x=>/^:?-{3,}:?$/.test(x))) break;
+    rows.push(Array.from({length:headers.length},(_,j)=>cell(pieces[j]??'')));
+    i++;
+  }
+  return {block:{type:'table',headers,aligns,rows}, nextIndex:i};
+}
+
+function tableCellLines(cell,width,fontSize,measure) {
+  const content=cell.text || '';
+  const wrapped=wrapText(content,width-18,fontSize,measure);
+  let cursor=0;
+  return wrapped.map(text=>{
+    let at=content.indexOf(text,cursor);
+    if(at<0) at=cursor;
+    cursor=at+text.length;
+    return {text,runs:sliceStyledRuns(cell.runs || [{text:content,bold:false}],at,at+text.length)};
+  });
+}
+
+export function planMarkdownTable(table,layout,fontPx,measure=defaultMeasure) {
+  const count=table.headers.length;
+  const fontSize=Math.max(13,Math.min(fontPx*.84,24,layout.width/(count*6.0)));
+  const lineHeight=Math.ceil(fontSize*1.42);
+  const weights=Array.from({length:count},(_,j)=>{
+    const examples=[table.headers[j],...table.rows.slice(0,32).map(row=>row[j])];
+    return Math.max(5,Math.min(26,Math.max(...examples.map(c=>Array.from(c.text).length),5)));
+  });
+  // Avoid overly narrow columns but allow wider columns for verbose values.
+  let colWidths=weights.map(w=>Math.sqrt(w));
+  const total=colWidths.reduce((a,b)=>a+b,0);
+  colWidths=colWidths.map(w=>layout.width*w/total);
+  const minWidth=layout.width / count * .64;
+  for(let n=0;n<3;n++){
+    const low=colWidths.map(w=>w<minWidth);
+    const shortage=colWidths.reduce((sum,w,j)=>sum+(low[j]?minWidth-w:0),0);
+    const free=colWidths.reduce((sum,w,j)=>sum+(!low[j]?w-minWidth:0),0);
+    if(!shortage||!free)break;
+    colWidths=colWidths.map((w,j)=>low[j]?minWidth:w-shortage*(w-minWidth)/free);
+  }
+  const prepare=row=>row.map((cell,j)=>tableCellLines(cell,colWidths[j],fontSize,measure));
+  const preparedHeader=prepare(table.headers);
+  const headerLines=Math.max(1,...preparedHeader.map(c=>c.length));
+  const headerHeight=Math.max(44,headerLines*lineHeight+14);
+  const preparedRows=table.rows.map(prepare);
+  return {fontSize,lineHeight,colWidths,preparedHeader,headerHeight,preparedRows,aligns:table.aligns};
+}
+
+function makeTableRow(prepared,aligns,offset,take,lineHeight,header=false) {
+  const cells=prepared.map((cell,i)=>{
+    const lines=cell.slice(offset,offset+take);
+    const runs=[];
+    lines.forEach((line,j)=>{
+      if(j) runs.push({text:'\n',bold:false});
+      runs.push(...line.runs);
+    });
+    return {text:lines.map(x=>x.text).join('\n'),runs,align:aligns[i]};
+  });
+  const shownLines=Math.max(1,...cells.map(c=>c.text.split('\n').length));
+  return {header,cells,height:Math.max(44,shownLines*lineHeight+14)};
+}
+
 export function parseMarkdown(markdown, overrideTitle = '') {
   const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
   const headings = lines.map((line, index) => {
@@ -145,16 +240,17 @@ export function parseMarkdown(markdown, overrideTitle = '') {
     current = { title: title || '内容', blocks: [] };
   }
 
-  lines.forEach((raw, index) => {
+  for (let index=0; index<lines.length; index++) {
+    const raw=lines[index];
     const line = raw.trim();
     if (/^(```|~~~)/.test(line)) {
       flush();
       inCode = !inCode;
-      return;
+      continue;
     }
     if (inCode) {
       current.blocks.push({ type: 'code', text: raw || ' ' });
-      return;
+      continue;
     }
     const h = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (h) {
@@ -164,39 +260,37 @@ export function parseMarkdown(markdown, overrideTitle = '') {
         flush();
         current.blocks.push({ type: 'subheading', text: stripInline(h[2]) });
       }
-      return;
+      continue;
     }
     if (/^(---+|\*\*\*+|___+)$/.test(line)) {
       flush();
       current.blocks.push({ type: 'break' });
-      return;
+      continue;
     }
-    if (!line) { flush(); return; }
+    if (!line) { flush(); continue; }
+    const table = readMarkdownTable(lines,index);
+    if (table) {
+      flush();
+      current.blocks.push(table.block);
+      index=table.nextIndex-1;
+      continue;
+    }
     const li = /^([-+*]|\d+[.)])\s+(.+)$/.exec(line);
     if (li) {
       flush();
       const marker = /^\d/.test(li[1]) ? li[1] : '•';
       const runs = parseBoldRuns(marker + '  ' + li[2]);
       current.blocks.push({ type: 'list', text: runs.map(r=>r.text).join(''), runs });
-      return;
+      continue;
     }
     if (/^>\s?/.test(line)) {
       flush();
       const runs = parseBoldRuns('❝  ' + line.replace(/^>\s?/, ''));
       current.blocks.push({ type: 'quote', text: runs.map(r=>r.text).join(''), runs });
-      return;
-    }
-    // Textual fallback for Markdown tables: retain cell contents.
-    if (/^\|.+\|$/.test(line)) {
-      flush();
-      if (!/^\|[\s:|-]+\|$/.test(line)) {
-        const cells = line.slice(1,-1).split('|').map(x => stripInline(x)).filter(Boolean);
-        if (cells.length) current.blocks.push({ type: 'paragraph', text: cells.join('  ·  ') });
-      }
-      return;
+      continue;
     }
     paragraphLines.push(line);
-  });
+  }
   flush();
   if (current.blocks.length) sections.push(current);
   if (!sections.length) sections.push({ title: documentTitle, blocks: [{ type: 'paragraph', text: '粘贴 Markdown 或普通文本后，幻灯片会自动出现在这里。' }] });
@@ -307,7 +401,7 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
   function makePage(title, continued = false) {
     const header = titleRows(title, continued);
     const page = {
-      title, continued, header, rows: [],
+      title, continued, header, rows: [], table: null,
       layout: {...layout, titleDividerY: top + (header.length === 1 ? 77 : 122)},
       y: top + (header.length === 1 ? 111 : 148)
     };
@@ -319,6 +413,43 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
     if (!section.blocks.length) continue;
     let page = makePage(section.title);
     for (const block of section.blocks) {
+      if (block.type === 'table') {
+        if (page.rows.length || page.table) page=makePage(section.title,true);
+        const plan=planMarkdownTable(block,layout,BODY_FONT,measure);
+        const reserve=16;
+        let currentTable=null;
+        function startTablePage(newPage=false) {
+          if(newPage) page=makePage(section.title,true);
+          const y=page.y+4;
+          if(y+plan.headerHeight+44 > contentBottom) {
+            throw new Error('Table cannot fit on a slide with these font and margin settings');
+          }
+          currentTable={x:left,y,width,columns:plan.colWidths,fontSize:plan.fontSize,
+            lineHeight:plan.lineHeight,rows:[
+              makeTableRow(plan.preparedHeader,plan.aligns,0,Infinity,plan.lineHeight,true)
+            ]};
+          page.table=currentTable;
+          page.y=y+plan.headerHeight;
+        }
+        startTablePage();
+        for (const prepared of plan.preparedRows) {
+          const totalLines=Math.max(1,...prepared.map(c=>c.length));
+          let offset=0;
+          while(offset<totalLines) {
+            const free=contentBottom-page.y-reserve;
+            const lines=Math.floor((free-14)/plan.lineHeight);
+            if (lines<1 || free<44) { startTablePage(true); continue; }
+            const take=Math.min(totalLines-offset,lines);
+            const fragment=makeTableRow(prepared,plan.aligns,offset,take,plan.lineHeight);
+            if(fragment.height>free+0.001) {startTablePage(true);continue;}
+            currentTable.rows.push(fragment);
+            page.y+=fragment.height;
+            offset+=take;
+          }
+        }
+        continue;
+      }
+      if(page.table) page=makePage(section.title,true);
       if (block.type === 'break') {
         if (page.rows.length) page = makePage(section.title, true);
         continue;

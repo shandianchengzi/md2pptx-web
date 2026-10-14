@@ -85,3 +85,11 @@ h1,h2{font-size:22px;font-weight:760;margin:0 0 6px}
 .toggle-label input{width:15px;height:15px;accent-color:#205875;margin:0}
 .settings-hint{color:#8b9cab;font-size:11px;line-height:1.55;margin:10px 0 0}
 @media(max-width:570px){.margin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Editable native PowerPoint table preview; the PDF/PPTX model uses the same row geometry. */
+.slide-native-table{position:absolute;box-sizing:border-box;overflow:hidden;color:#233e52;background:#fff}
+.slide-table-row{box-sizing:border-box}
+.slide-table-cell{box-sizing:border-box;padding:7px 9px;border-right:1px solid #d7e3eb;border-bottom:1px solid #d7e3eb;white-space:pre-wrap;overflow:hidden;line-height:1.42;overflow-wrap:anywhere;display:flex;align-items:center;min-width:0}
+.slide-table-cell:first-child{border-left:1px solid #d7e3eb}
+.slide-table-row:first-child .slide-table-cell{border-top:1px solid #d7e3eb}
+.slide-table-head .slide-table-cell{background:#eaf2f6;color:#19354a;font-weight:750}
