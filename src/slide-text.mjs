@@ -25,7 +25,8 @@ export function buildSlideTextBox(page,documentTitle,slideIndex,slideCount,unit)
         ...(lastPart&&gap>0?{paraSpaceAfter:gap*PX_TO_PT}:{}),
         ...(lastPart&&(!lastRow||footer)?{breakLine:true}:{})
       };
-      runs.push({text:part.text,options:opts});
+      runs.push({text:part.mathTex ? '\u3000'.repeat(part.text.length) : part.text,
+        options:part.mathTex?{...opts,color:'FBFCFE',bold:false}:opts});
     });
   }
   if(footer){

@@ -10,6 +10,8 @@ await cp('src/app.js', join(dist, 'src/app.js'));
 await cp('src/pagination.mjs', join(dist, 'src/pagination.mjs'));
 await cp('src/slide-text.mjs', join(dist, 'src/slide-text.mjs'));
 await cp('src/office-compat.mjs',join(dist,'src/office-compat.mjs'));
+await cp('src/math-render.mjs',join(dist,'src/math-render.mjs'));
+await cp('node_modules/mathjax-full/es5/tex-svg-full.js',join(dist,'vendor/tex-svg-full.js'));
 await cp('node_modules/jszip/dist/jszip.min.js',join(dist,'vendor/jszip.min.js'));
 await cp('src/style.css', join(dist, 'src/style.css'));
 await cp('node_modules/pptxgenjs/dist/pptxgen.bundle.js', join(dist,'vendor/pptxgen.bundle.js'));

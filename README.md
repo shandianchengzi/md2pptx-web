@@ -40,3 +40,7 @@ The build bundles a pinned PptxGenJS distribution into the Pages artifact. The p
 ## Microsoft PowerPoint compatibility
 
 Before any browser download, the generated PPTX is normalized to repair PptxGenJS 4.0.0's duplicate `p:cNvPr` object IDs, duplicate `a:pPr` elements within rich-text paragraphs, and incorrect table-frame extents. The workflow tests these OOXML invariants and opens representative documents in LibreOffice. Microsoft PowerPoint itself is not available on the Linux CI runner; its exact repair dialog cannot be asserted in CI.
+
+## LaTeX equations
+
+Inline `$...$` and `\\(...\\)`, as well as display `$$...$$` and `\\[...\\]` are rendered locally with a bundled MathJax SVG engine. PowerPoint embeds the equations as high-resolution PNG formula images for compatibility; surrounding prose remains native editable text. Equations themselves are **not native editable Office Math objects**, and future support for OMML requires separate validation. Unsupported LaTeX commands may trigger an error rendering placeholder.

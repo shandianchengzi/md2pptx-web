@@ -99,6 +99,14 @@
   </main>
 
   <footer class="site-footer">MD2PPTX · Open source · Built for research notes and long-form documents</footer>
+  <script>
+    window.MathJax = {
+      tex: {packages:{'[+]':['ams']}},
+      svg: {fontCache:'none'},
+      startup: {typeset:false}
+    };
+  </script>
+  <script src="./vendor/tex-svg-full.js"></script>
   <script src="./vendor/jszip.min.js"></script>
   <script src="./vendor/pptxgen.bundle.js"></script>
   <script type="module" src="./src/app.js"></script>

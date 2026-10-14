@@ -10,7 +10,8 @@
     "test:browser": "node tests/browser-smoke.mjs"
   },
   "dependencies": {
-    "pptxgenjs": "4.0.0"
+    "pptxgenjs": "4.0.0",
+    "mathjax-full": "3.2.2"
   },
   "devDependencies": {
     "playwright-core": "1.56.1",
