@@ -342,8 +342,26 @@ try {
   await page.locator('#marginLeft').fill('1.4');
   await page.locator('#marginRight').fill('1.4');
   await page.locator('#markdownInput').fill(screenshotDoc);
-  await page.waitForFunction(() => document.querySelectorAll('.display-math svg').length===2 &&
-    !!document.querySelector('.slide-native-table'),null,{timeout:30000});
+  try {
+    await page.waitForFunction(() => document.querySelectorAll('.display-math svg').length===2 &&
+      !!document.querySelector('.slide-native-table'),null,{timeout:16000});
+  } catch (e) {
+    const detail=await page.evaluate(async()=>{
+      const renderer=await import('./src/math-render.mjs');
+      return {
+        body:document.querySelector('#markdownInput')?.value,
+        count:document.querySelector('#pageCount')?.textContent,
+        active:document.querySelector('#slidePosition')?.textContent,
+        displayMath:[...document.querySelectorAll('.display-math')].map(x=>({txt:x.innerText,tex:x.dataset.tex,svg:x.querySelectorAll('svg').length,classes:x.className})),
+        tableCount:document.querySelectorAll('.slide-native-table').length,
+        err:document.querySelector('#status')?.innerText,
+        renderer:renderer.mathStatus(),
+        mathJax:typeof window.MathJax?.tex2svg
+      };
+    });
+    console.log('SCREENSHOT_CASE_DIAGNOSTICS '+JSON.stringify(detail));
+    throw e;
+  }
   assert.equal(await page.locator('.display-math').count(),2);
   assert.equal(await page.locator('.math-loading').count(),0);
   assert.equal(await page.locator('.math-error').count(),0);
