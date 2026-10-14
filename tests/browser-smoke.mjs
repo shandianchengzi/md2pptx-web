@@ -7,6 +7,20 @@ import { chromium } from 'playwright-core';
 import JSZip from 'jszip';
 import { execFileSync } from 'node:child_process';
 
+
+async function validateSlideStructuralIntegrity(zip) {
+  const slideNames=Object.keys(zip.files).filter(x=>/^ppt\/slides\/slide\d+\.xml$/.test(x));
+  for(const path of slideNames) {
+    const slide=await zip.file(path).async('string');
+    const ids=[...slide.matchAll(/<p:cNvPr\b[^>]*\bid="(\d+)"/g)].map(m=>m[1]);
+    assert.equal(ids.length,new Set(ids).size,path+': all shape ids must be unique');
+    for(const m of slide.matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)) {
+      const starts=(m[1].match(/<a:pPr(?:\s|>)/g)||[]).length;
+      assert.ok(starts<=1,path+': each paragraph may have one a:pPr only');
+    }
+  }
+}
+
 const prefix = '/md2pptx-web/';
 
 // A valid ZIP is not enough: Microsoft PowerPoint can reject a well-formed
@@ -31,7 +45,7 @@ async function verifyCanOpenInOffice(pptxPath,label) {
 
 const allowed = new Set([
   'index.html', 'favicon.svg', 'src/app.js', 'src/pagination.mjs',
-  'src/style.css', 'src/slide-text.mjs', 'vendor/pptxgen.bundle.js'
+  'src/style.css', 'src/slide-text.mjs', 'src/office-compat.mjs', 'vendor/jszip.min.js', 'vendor/pptxgen.bundle.js'
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -151,6 +165,7 @@ try {
   assert.ok((await stat(output)).size > 4000, 'download must contain PPTX data');
   await verifyCanOpenInOffice(output,'plain text and inline bold');
   const zip = await JSZip.loadAsync(await readFile(output));
+  await validateSlideStructuralIntegrity(zip);
   assert.ok(zip.file('ppt/presentation.xml'), 'download must be an editable PowerPoint package');
   const slideFiles = Object.keys(zip.files).filter(p => /^ppt\/slides\/slide\d+\.xml$/.test(p));
   assert.equal(slideFiles.length, customPageCount, 'preview and PPTX must have the same slide count');
@@ -211,6 +226,7 @@ try {
   await tableDownload.saveAs(tableOutput);
   await verifyCanOpenInOffice(tableOutput,'multi-page editable table');
   const tableZip=await JSZip.loadAsync(await readFile(tableOutput));
+  await validateSlideStructuralIntegrity(tableZip);
   const tableSlides=Object.keys(tableZip.files).filter(path=>/^ppt\/slides\/slide\d+\.xml$/.test(path));
   assert.equal(tableSlides.length,tablePageCount);
   let tableSlideCount=0;
@@ -262,6 +278,7 @@ try {
   await mixedDownload.saveAs(mixedPath);
   await verifyCanOpenInOffice(mixedPath,'prose and native table on one slide');
   const mixedZip=await JSZip.loadAsync(await readFile(mixedPath));
+  await validateSlideStructuralIntegrity(mixedZip);
   const mixedXml=await mixedZip.file('ppt/slides/slide1.xml').async('string');
   assert.match(mixedXml,/142 个固件数据集/,'first slide includes prose');
   assert.match(mixedXml,/<a:tbl>/,'first slide includes a native editable table');

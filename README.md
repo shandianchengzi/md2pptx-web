@@ -36,3 +36,7 @@ Open `http://localhost:8080`. Node 20+ recommended.
 `src/pagination.mjs` contains a shared deterministic slide layout model used by both preview and PPTX export. The browser's font measurements drive line breaking, so rendered layout may differ slightly on devices with different fonts. Markdown headings, paragraphs, bold emphasis, lists, quotes, fenced code, and pipe tables are supported. Tables become native PowerPoint tables and can continue across slides, with repeated header rows. Merged cells, nested tables, and complex HTML table layouts are not supported; image references still become text. Unlike AI summarizers, this tool does not shorten your document.
 
 The build bundles a pinned PptxGenJS distribution into the Pages artifact. The published site has no runtime CDN dependency. User documents remain in browser memory only and are not stored or sent to GitHub.
+
+## Microsoft PowerPoint compatibility
+
+Before any browser download, the generated PPTX is normalized to repair PptxGenJS 4.0.0's duplicate `p:cNvPr` object IDs, duplicate `a:pPr` elements within rich-text paragraphs, and incorrect table-frame extents. The workflow tests these OOXML invariants and opens representative documents in LibreOffice. Microsoft PowerPoint itself is not available on the Linux CI runner; its exact repair dialog cannot be asserted in CI.

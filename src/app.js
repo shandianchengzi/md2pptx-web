@@ -5,6 +5,7 @@ import {
   MIN_MARGIN_CM, MAX_MARGIN_CM
 } from './pagination.mjs';
 import { buildSlideTextBox } from './slide-text.mjs';
+import { sanitizePptx, triggerDownload } from './office-compat.mjs';
 
 const $ = (id) => document.getElementById(id);
 const editor = $('markdownInput');
@@ -374,7 +375,9 @@ async function exportPptx() {
         });
       }
     });
-    await pptx.writeFile({ fileName: sanitizeFileName(deck.title) + '.pptx' });
+    const raw=await pptx.write({outputType:'blob'});
+    const safe=await sanitizePptx(raw,window.JSZip);
+    triggerDownload(safe.blob,sanitizeFileName(deck.title)+'.pptx');
     message('PPTX 已生成：' + deck.pages.length + ' 页。可以在 PowerPoint 中逐字编辑。');
   } catch (err) {
     console.error(err);
