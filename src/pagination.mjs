@@ -294,30 +294,36 @@ export function parseMarkdown(markdown, overrideTitle = '') {
       continue;
     }
     if (!line) { flush(); continue; }
-    // Display math: $latex$, multiline $...$ or \[...\].
-    if(line.startsWith('$') || line.startsWith('\\[')) {
-      const marker=line.startsWith('$')?'$':'\\[';
-      const closing=marker==='$'?'$':'\\]';
+    // Display math must use $$...$$ or \[...\], not single $.
+    // A lone $ is reserved for inline math and must never consume the text
+    // between a pair of standalone $$ markers.
+    if(line.startsWith('$$') || line.startsWith('\\[')) {
+      const marker=line.startsWith('$$')?'$$':'\\[';
+      const closing=marker==='$$'?'$$':'\\]';
       const remaining=line.slice(marker.length);
-      let latex='',closed=false;
+      let latex='',closed=false,endIndex=index;
       const found=remaining.indexOf(closing);
-      if(found>=0) {latex=remaining.slice(0,found);closed=true;}
-      else {
+      if(found>=0) {
+        latex=remaining.slice(0,found);
+        closed=true;
+      } else {
         latex=remaining;
         for(let next=index+1;next<lines.length;next++){
           const fragment=lines[next];
           const closeAt=fragment.indexOf(closing);
-          if(closeAt>=0){
+          if(closeAt>=0) {
             latex+='\n'+fragment.slice(0,closeAt);
-            index=next;closed=true;break;
+            endIndex=next;
+            closed=true;
+            break;
           }
           latex+='\n'+fragment;
-          index=next;
         }
       }
-      if(closed) {
+      if(closed && latex.trim()) {
         flush();
         current.blocks.push({type:'math-block',tex:latex.trim()});
+        index=endIndex;
         continue;
       }
     }
