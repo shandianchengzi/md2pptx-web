@@ -240,3 +240,33 @@ test('display math inserts a separate centered formula block',()=>{
   assert.equal(f.length,2);
   assert.ok(f.every(x=>x.display&&x.height>0&&x.y>=0));
 });
+
+
+test('user screenshot: multiline and inline display TeX do not waste slide space',()=>{
+  const md=[
+    '**当前规模：142 个固件数据集，85 个单元测试用例**',
+    '$$',
+    'a_b,a^b',
+    '$$',
+    '$$\\frac{a}{b}$$',
+    '| 固件类别 | 固件数 | 单元测试用例 | 模糊测试固件 | 其他固件 |',
+    '|---|---:|---:|---:|---:|',
+    '| 基础外设 | 46 | 66 | 0 | 0 |',
+    '| 数据传输及复杂外设 | 13 | 15 | 0 | 2 |',
+    '| 网络通信 | 34 | 2 | 15 | 18 |',
+    '| 射频通信 | 24 | 2 | 5 | 17 |',
+    '| 实际应用 | 25 | 0 | 15 | 10 |',
+    '| **合计** | **142** | **85** | **35** | **47** |'
+  ].join('\n');
+  const deck=layoutMarkdown(md,{
+    density:'compact',bodyFontPt:14,
+    marginsCm:{top:1.1,bottom:.9,left:1.4,right:1.4}
+  });
+  const first=deck.pages[0];
+  assert.deepEqual(first.formulas.map(x=>x.tex),['a_b,a^b','\\frac{a}{b}']);
+  assert.ok(first.table,'table begins on same slide as formulas');
+  assert.ok(first.table.rows.length>=4,'compact formulas should leave room for data rows');
+  const lastFormula=first.formulas[1];
+  const gap=first.table.y-(lastFormula.y+lastFormula.height);
+  assert.ok(gap>=0&&gap<=25,'formula/table gap should be compact, got '+gap);
+});

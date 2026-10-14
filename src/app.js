@@ -301,8 +301,10 @@ function regenerate() {
   paintSlide();
   paintThumbnails();
   if(/\$|\\\(|\\\[/.test(editor.value)){
-    mathReady().then(()=>paintSlide())
-      .catch(err=>message('公式引擎加载失败：'+err.message,true));
+    const inputSnapshot=editor.value;
+    mathReady().then(()=>{
+      if(editor.value===inputSnapshot) paintSlide();
+    }).catch(err=>message('公式引擎加载失败：'+err.message,true));
   }
 }
 

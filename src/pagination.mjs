@@ -471,12 +471,16 @@ export function layoutMarkdown(markdown, options = {}, measure = defaultMeasure)
     for (const block of section.blocks) {
       if (block.type === 'math-block') {
         const large=/\\(?:frac|dfrac|sum|int|lim|begin)\b/.test(block.tex);
-        const height=large?102:73;
-        const topPadding=12;
+        // Use a font-proportional formula box rather than reserving a giant
+        // fixed block: the previous 73/102px values left the following table
+        // stranded near the slide bottom at 14pt body size.
+        const height=large ? Math.max(62,Math.ceil(BODY_FONT*2.35))
+                           : Math.max(36,Math.ceil(BODY_FONT*1.5));
+        const topPadding=5;
         if(page.y+topPadding+height>contentBottom)page=makePage(section.title,true);
         page.formulas.push({tex:block.tex,display:true,
           x:left,y:page.y+topPadding,width,height});
-        page.y+=height+topPadding+GAP;
+        page.y+=height+topPadding+Math.min(GAP,9);
         continue;
       }
       if (block.type === 'table') {

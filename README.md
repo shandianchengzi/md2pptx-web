@@ -44,3 +44,5 @@ Before any browser download, the generated PPTX is normalized to repair PptxGenJ
 ## LaTeX equations
 
 Inline `$...$` and `\\(...\\)`, as well as display `$$...$$` and `\\[...\\]` are rendered locally with a bundled MathJax SVG engine. PowerPoint embeds the equations as high-resolution PNG formula images for compatibility; surrounding prose remains native editable text. Equations themselves are **not native editable Office Math objects**, and future support for OMML requires separate validation. Unsupported LaTeX commands may trigger an error rendering placeholder.
+
+Display formula height follows body font size rather than a fixed 73/102px reservation. A regression fixture covers multiline `$$` equations, a fraction, and a Markdown table on the same slide. While the MathJax engine loads, the preview shows a loading indicator rather than raw TeX.

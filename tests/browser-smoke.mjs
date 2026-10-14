@@ -317,6 +317,59 @@ try {
   assert.doesNotMatch(mathXml,/\$\$|\\frac/, 'raw LaTeX should not be printed in slides');
   assert.ok((mathXml.match(/<p:pic>/g)||[]).length>=3,'each math image should be an editable placement');
 
+
+  // Exact screenshot regression: multiline display math followed immediately
+  // by a table. Both formulas must be SVGs, never raw TeX text/placeholders.
+  const screenshotDoc=[
+    '**当前规模：142 个固件数据集，85 个单元测试用例**',
+    '$',
+    'a_b,a^b',
+    '$',
+    '$\\frac{a}{b}$',
+    '| 固件类别 | 固件数 | 单元测试用例 | 模糊测试固件 | 其他固件 |',
+    '|---|---:|---:|---:|---:|',
+    '| 基础外设 | 46 | 66 | 0 | 0 |',
+    '| 数据传输及复杂外设 | 13 | 15 | 0 | 2 |',
+    '| 网络通信 | 34 | 2 | 15 | 18 |',
+    '| 射频通信 | 24 | 2 | 5 | 17 |',
+    '| 实际应用 | 25 | 0 | 15 | 10 |',
+    '| **合计** | **142** | **85** | **35** | **47** |'
+  ].join('\n');
+  await page.locator('#bodyFontPt').fill('14');
+  await page.locator('#density').selectOption('compact');
+  await page.locator('#marginTop').fill('1.1');
+  await page.locator('#marginBottom').fill('0.9');
+  await page.locator('#marginLeft').fill('1.4');
+  await page.locator('#marginRight').fill('1.4');
+  await page.locator('#markdownInput').fill(screenshotDoc);
+  await page.waitForFunction(() => document.querySelectorAll('.display-math svg').length===2 &&
+    !!document.querySelector('.slide-native-table'),null,{timeout:30000});
+  assert.equal(await page.locator('.display-math').count(),2);
+  assert.equal(await page.locator('.math-loading').count(),0);
+  assert.equal(await page.locator('.math-error').count(),0);
+  const checkGeometry=await page.evaluate(()=>{
+    const formulas=[...document.querySelectorAll('.display-math')].map(el=>({
+      y:parseFloat(el.style.top),h:parseFloat(el.style.height)
+    }));
+    const table=document.querySelector('.slide-native-table');
+    return {gap:parseFloat(table.style.top) - (formulas.at(-1).y+formulas.at(-1).h),
+      dataRows:table.querySelectorAll('.slide-table-row').length};
+  });
+  assert.ok(checkGeometry.gap>=0&&checkGeometry.gap<=25,
+    'display formula should directly precede table: '+JSON.stringify(checkGeometry));
+  assert.ok(checkGeometry.dataRows>=4,'formula space must not strand table at bottom');
+  const [screenshotDownload]=await Promise.all([
+    page.waitForEvent('download',{timeout:35000}),
+    page.locator('#downloadButton').click()
+  ]);
+  const screenshotPptx=join(downloadDir,'screenshot-case.pptx');
+  await screenshotDownload.saveAs(screenshotPptx);
+  await verifyCanOpenInOffice(screenshotPptx,'multiline display math and editable table');
+  const screenshotZip=await JSZip.loadAsync(await readFile(screenshotPptx));
+  await validateSlideStructuralIntegrity(screenshotZip);
+  const screenshotXml=await screenshotZip.file('ppt/slides/slide1.xml').async('string');
+  assert.ok((screenshotXml.match(/<p:pic>/g)||[]).length>=2,'both formulas must export as PNG');
+
   assert.deepEqual(errors, [], 'browser console should have no runtime errors');
   console.log('Browser E2E passed: ' + customPageCount + ' pages with custom margins, bold and footer options at 30pt, valid ' + (await stat(output)).size + '-byte PPTX');
 } finally {

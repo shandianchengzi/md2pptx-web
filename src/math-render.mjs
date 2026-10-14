@@ -2,21 +2,36 @@
 // MathJax result (not SVG media parts) for maximum Office compatibility.
 // Formula images are intentionally separate from the one editable text box.
 let readyPromise;
+let engineState='loading';
+let engineError=null;
+export function mathStatus() { return {state:engineState,error:engineError}; }
 export function mathReady() {
   if(!readyPromise) {
     readyPromise=(async()=>{
       const m=window.MathJax;
-      if(!m || !m.startup) throw Error('MathJax rendering library not loaded');
+      if(!m || !m.startup) throw Error('MathJax library is unavailable');
       await m.startup.promise;
       if(typeof m.tex2svg!=='function')throw Error('MathJax TeX renderer unavailable');
+      // Validate the exact formulas reported as unrendered in the UI.
+      for(const tex of ['a_b,a^b','\frac{a}{b}']) {
+        const svg=m.tex2svg(tex,{display:true}).querySelector('svg');
+        if(!svg)throw Error('No mathematical SVG generated for '+tex);
+      }
+      engineState='ready';
+      engineError=null;
       return m;
-    })();
+    })().catch(err=>{
+      engineState='error';
+      engineError=err?.message || String(err);
+      readyPromise=null;
+      throw err;
+    });
   }
   return readyPromise;
 }
 
 function mathSvg(tex,display=false) {
-  if(!window.MathJax || typeof window.MathJax.tex2svg!=='function')return null;
+  if(engineState!=='ready' || !window.MathJax || typeof window.MathJax.tex2svg!=='function')return null;
   const container=window.MathJax.tex2svg(String(tex),{display,em:16,ex:8,containerWidth:1200});
   return container.querySelector('svg');
 }
@@ -42,6 +57,7 @@ export function previewMath(tex,box,display=false) {
   node.style.alignItems='center';
   node.style.width=box.width+'px';
   node.style.height=box.height+'px';
+  node.dataset.tex=tex;
   const measure=mathDimensions(tex,box.width,box.height,display);
   if(measure.svg) {
     const svg=measure.svg.cloneNode(true);
@@ -53,8 +69,9 @@ export function previewMath(tex,box,display=false) {
     node.append(svg);
     node.title=tex;
   } else {
-    node.textContent=tex;
-    node.title='Mathematics engine loading';
+    node.textContent=engineState==='error' ? '公式渲染失败' : '公式加载中…';
+    node.classList.add(engineState==='error' ? 'math-error':'math-loading');
+    node.title=engineState==='error' ? String(engineError) : 'MathJax is initializing';
   }
   return node;
 }
