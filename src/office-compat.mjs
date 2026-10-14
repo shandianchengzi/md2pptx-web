@@ -27,23 +27,25 @@ export function normalizeSlideXml(source, browserDom = globalThis) {
       reindexed++;
     } else used.add(id);
   }
-  // Only direct a:pPr child nodes are relevant; a:p can also contain a:r/a:br.
+  // PptxGenJS emits a:pPr before *each* rich text run. These must
+  // be merged, not split: splitting turns inline bold/math into new lines.
   for(const paragraph of Array.from(xml.getElementsByTagNameNS(A,'p'))) {
-    const properties = nodeChildren(paragraph,'pPr');
+    const properties=nodeChildren(paragraph,'pPr');
     if(properties.length<2) continue;
-    const parent=paragraph.parentNode;
-    let current=paragraph;
-    let afterContent=false;
-    for(const child of Array.from(paragraph.childNodes)) {
-      if (child.nodeType===1 && child.localName==='pPr' && child.namespaceURI===A && afterContent) {
-        const next=xml.createElementNS(A,'a:p');
-        parent.insertBefore(next,current.nextSibling);
-        current=next;
-        splitParagraphs++;
+    const target=properties[0];
+    for(const extra of properties.slice(1)) {
+      // Later run's paragraph properties can carry the final spacing
+      // (paraSpaceAfter, etc.), so merge them into the first pPr.
+      for(const attribute of Array.from(extra.attributes))
+        target.setAttributeNS(attribute.namespaceURI,attribute.name,attribute.value);
+      for(const child of Array.from(extra.children)){
+        const existing=Array.from(target.children).find(n=>
+          n.namespaceURI===child.namespaceURI && n.localName===child.localName);
+        if(existing)target.replaceChild(child.cloneNode(true),existing);
+        else target.appendChild(child.cloneNode(true));
       }
-      if(current!==paragraph) current.appendChild(child);
-      if(child.nodeType===1 && child.localName!=='pPr') afterContent=true;
-      if(child.nodeType===1 && child.localName==='pPr') afterContent=false;
+      extra.remove();
+      splitParagraphs++;
     }
   }
   // PptxGenJS 4.0 sometimes sets a 1-inch graphicFrame extent regardless of
