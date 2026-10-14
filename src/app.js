@@ -6,6 +6,7 @@ import {
 } from './pagination.mjs';
 import { buildSlideTextBox } from './slide-text.mjs';
 import { sanitizePptx, triggerDownload } from './office-compat.mjs';
+import { mathReady, previewMath, mathPng } from './math-render.mjs';
 
 const $ = (id) => document.getElementById(id);
 const editor = $('markdownInput');
@@ -173,9 +174,15 @@ function paintSlide() {
     el.style.fontWeight = row.bold ? '750' : '450';
     if (row.runs?.length) {
       for (const run of row.runs) {
-        const span = element('span','',run.text);
-        if (run.bold) span.style.fontWeight = '750';
-        el.appendChild(span);
+        if(run.mathTex){
+          const slots='\u3000'.repeat(run.text.length);
+          const width=measure(slots,row.size);
+          el.appendChild(previewMath(run.mathTex,{width,height:row.height*.9},false));
+        } else {
+          const span = element('span','',run.text);
+          if (run.bold) span.style.fontWeight = '750';
+          el.appendChild(span);
+        }
       }
     } else {
       el.textContent = row.text;
@@ -192,6 +199,12 @@ function paintSlide() {
     else footer.appendChild(element('span'));
     if (page.layout.showPageNumber) footer.appendChild(element('span','',String(activeSlide+1)+' / '+deck.pages.length));
     preview.appendChild(footer);
+  }
+  for(const formula of page.formulas || []){
+    const elt=previewMath(formula.tex,{width:formula.width,height:formula.height},true);
+    elt.style.left=formula.x+'px';
+    elt.style.top=formula.y+'px';
+    preview.appendChild(elt);
   }
   if (page.table) {
     const tab=page.table;
@@ -211,7 +224,7 @@ function paintSlide() {
         cellEl.style.textAlign=cell.align;
         if(cell.runs?.length) {
           for(const run of cell.runs) {
-            const span=element('span','',run.text);
+            const span=element('span','',run.mathTex ? run.mathTex : run.text);
             if(run.bold) span.style.fontWeight='750';
             cellEl.appendChild(span);
           }
@@ -287,6 +300,10 @@ function regenerate() {
   refreshNavigation();
   paintSlide();
   paintThumbnails();
+  if(/\$|\\\(|\\\[/.test(editor.value)){
+    mathReady().then(()=>paintSlide())
+      .catch(err=>message('公式引擎加载失败：'+err.message,true));
+  }
 }
 
 function scheduleRegenerate() {
@@ -325,7 +342,8 @@ async function exportPptx() {
     pptx.subject = 'Editable slides generated from Markdown';
     pptx.title = deck.title;
     pptx.lang = 'zh-CN';
-    deck.pages.forEach((page, index) => {
+    for (let index=0;index<deck.pages.length;index++) {
+      const page=deck.pages[index];
       const slide = pptx.addSlide();
       slide.background = { color: 'FBFCFE' };
       slide.addShape(pptx.ShapeType.rect, {
@@ -343,8 +361,8 @@ async function exportPptx() {
         const t=page.table;
         const tabRows=t.rows.map(row=>row.cells.map(cell=>({
           text:cell.runs?.some(run=>run.bold)
-            ? cell.runs.map(run=>({text:run.text,options:{bold:Boolean(run.bold)}}))
-            : cell.text,
+            ? cell.runs.map(run=>({text:run.mathTex ? run.mathTex : run.text,options:{bold:Boolean(run.bold)}}))
+            : cell.text.replace(/\uE000+/g,'[math]'),
           options:{
             align:cell.align,
             bold:Boolean(row.header),
@@ -374,7 +392,32 @@ async function exportPptx() {
           line: { color: 'E7EDF1', width: .7 }
         });
       }
-    });
+      // Display math appears as centered, sharp PNG images; text outside
+      // formulas remains editable in the slide's single rich-text shape.
+      for(const formula of page.formulas || []){
+        const png=await mathPng(formula.tex,Math.min(formula.width,700),formula.height,true);
+        slide.addImage({data:png.data,
+          x:(formula.x+(formula.width-png.width)/2)*UNIT,
+          y:(formula.y+(formula.height-png.height)/2)*UNIT,
+          w:png.width*UNIT,h:png.height*UNIT});
+      }
+      for(const row of page.rows){
+        if(!row.runs?.some(run=>run.mathTex))continue;
+        let prefix='';
+        for(const part of row.runs){
+          if(part.mathTex){
+            const marker='\u3000'.repeat(part.text.length);
+            const slotWidth=measure(marker,row.size);
+            const math=await mathPng(part.mathTex,slotWidth,row.height*.86,false);
+            const left=row.x+measure(prefix,row.size)+(slotWidth-math.width)/2;
+            const top=row.y+(row.height-math.height)/2;
+            slide.addImage({data:math.data,x:left*UNIT,y:top*UNIT,
+              w:math.width*UNIT,h:math.height*UNIT});
+            prefix+=marker;
+          } else prefix+=part.text;
+        }
+      }
+    }
     const raw=await pptx.write({outputType:'blob'});
     const safe=await sanitizePptx(raw,window.JSZip);
     triggerDownload(safe.blob,sanitizeFileName(deck.title)+'.pptx');
